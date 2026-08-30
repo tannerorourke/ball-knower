@@ -296,7 +296,7 @@ def cmd_research(cfg, args):
         backend = llm.get("backend", "claude-cli")
         if backend == "none":
             sys.exit("llm.backend is 'none' - research needs an LLM; set llm.backend or use --write-only")
-        print(f"running {len(prompts)} shards via {backend} (parallel {args.parallel}) ...")
+        print(f"running {len(prompts)} shards via {backend} / {model or 'backend default'} (parallel {args.parallel}) ...")
 
         def one(p):
             try:

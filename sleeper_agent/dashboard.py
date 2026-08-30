@@ -35,6 +35,9 @@ class Dashboard:
             f"picks until me: [bold]{s['picks_until_me']}[/]  eta ~{eta}   "
             f"autodraft slots: {s['autodraft_slots'] or '-'}"
         )
+        # -- appended, not interpolated: a model name may contain brackets rich would read as markup
+        if eng.llm_cfg.get("backend", "none") not in ("none", "fake") and eng.llm_cfg.get("draft_model"):
+            hdr.append(f"   {eng.llm_cfg['draft_model']}")
 
         # my roster
         rt = Table(title="My roster", expand=True, show_edge=False, pad_edge=False)

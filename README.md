@@ -13,15 +13,15 @@ At draft time, the system uses a deterministic scoring algorithm based on VORP a
 **Before draft**:
 
 1. `cd ./sleeper-agent` $\rightarrow$ `pip install -r requirements.txt` $\rightarrow$ set `league_id` (`sleeper.com/leagues/<this_number>/league`) and username in `config.yaml`.
-3. `python -m sleeper_agent setup` - confirms roster/scoring parse, seeds `players_skeleton.csv`, and prints your picks + a settings block.
-4. (Optional) `python tools/make_fake_research.py data` and `python -m sleeper_agent mock --offline --speed 60` (add --no-llm to skip model card) - dry run so the screen and CLI output is familiar. 
+2. `python -m sleeper_agent setup` - confirms roster/scoring parse, seeds `players_skeleton.csv`, and prints your picks + a settings block.
+3. (Optional) `python tools/make_fake_research.py data` and `python -m sleeper_agent mock --offline --speed 60` (add --no-llm to skip model card) - dry run so the screen and CLI output is familiar.
 
 **Draft day (2+ hrs out)**:
 
 1. Research options:
-- (best) `python -m sleeper_agent research --by team` - Seed players and base stats (bye week, VORP, etc) from Sleeper's projections API base stats. Research agents analyze team and player news *per-team* (4 concurrent, ~35m runtime) to add judgement data (floor/ceil, risk, role, tags, tiers, po_sched), and emit `players.csv`/`stacks.csv`/`anti.csv`. Booyah!
-- (better) `python -m sleeper_agent research` - Seeds base stats, run research agents *per NFL division* (4 concurrent, ~10m) to add judgement data and emit research tables. Best if short on time.
-- (ok) `python -m sleeper_agent fetch` - only generate `data/players_skeleton.csv`. Run `RESEARCH.md` in a LM of your choice with the skeleton attached. Place output under `data\`.
+   - **(best)** `python -m sleeper_agent research --by team` - Seed players and base stats (bye week, VORP, etc) from Sleeper's projections API base stats. Research agents analyze team and player news *per-team* (4 concurrent, ~35m runtime) to add judgement data (floor/ceil, risk, role, tags, tiers, po_sched), and emit `players.csv`/`stacks.csv`/`anti.csv`. Booyah!
+   - **(good)** `python -m sleeper_agent research` - Seeds base stats, run research agents *per NFL division* (4 concurrent, ~10m) to add judgement data and emit research tables. Best if short on time.
+   - **(ok)** `python -m sleeper_agent fetch` - only generate `data/players_skeleton.csv`. Run `RESEARCH.md` in a LM of your choice with the skeleton attached. Place output under `data\`.
 2. Once the draft order posts: `python -m sleeper_agent script` - your round-by-round expected board.
 3. Edit strategy_notes in `config.yaml` for additional rules you want enforced during your draft.
 
@@ -55,9 +55,9 @@ python -m sleeper_agent mock     # dry run against a simulated draft. --speed 60
 
 ## Research Tables
 
-`players.csv`: One row per player with projection, floor/ceiling, tier, ADP, risk, role, injury, bye, and tags from a closed vocabulary. 
-`stacks.csv` lists each QB with the pass-catchers whose weekly scores correlate with his, scored 0–100. 
-`anti.csv` lists same-team pairs that cannibalize each other with a penalty in season points. The full schema and vocabulary is in `RESEARCH_PROMPT.md`; Every table is keyed by `name`
+- `players.csv`: One row per player with projection, floor/ceiling, tier, ADP, risk, role, injury, bye, and tags from a closed vocabulary.
+- `stacks.csv` lists each QB with the pass-catchers whose weekly scores correlate with his, scored 0–100.
+- `anti.csv` lists same-team pairs that cannibalize each other with a penalty in season points. The full schema and vocabulary is in `RESEARCH_PROMPT.md`; Every table is keyed by `name`
 
 ## Metrics
 
@@ -83,6 +83,7 @@ Bye weeks are **not** in `adj` and surface instead as `bye_team_count` (rostered
 **E[best at next] and wait_cost**: For each position, the Monte Carlo estimator reports the expected best VORP still available at your next pick. `wait_cost = vorp − E[best at next][pos]` is what waiting one turn costs you at that position. This is the actual draft-timing criterion: if you'll fill both positions eventually, drafting position P now over Q is right iff `wait_cost(P) > wait_cost(Q)`. A deep position has low wait cost regardless of how good its top player is. `wait_cost` is scaled by `scoring.wait_w[need_tag]` - it only counts for real when you actually intend to fill the slot (STARTER ×1.0, FLEX ×0.8, BACKUP ×0.6, DEPTH ×0.15, CAPPED/K-WAIT ×0).
 
 **need**: a roster-phase *gate* - fill starters, then direct backups, then maximize. Six tags:
+
 - `STARTER` - open fixed slot at their position, `+ need_weight` (×`urgency_factor` once rounds left ≤ open starters + 1).
 - `FLEX` - fixed slots at that position filled, an open flex slot accepts them, `+half`.
 - `BACKUP` - every (non-K) starter is filled and the position hasn't hit its `backup_targets` count yet: `+ backup_weight × need_weight`. A backup only *covers* a starter if their byes differ - if the candidate's bye collides with a starter (or an already-drafted backup) at that position, the bonus is shaded to `× backup_bye_overlap_factor` and the card notes the weak cover.
@@ -145,27 +146,27 @@ The terminal UI runs half-screen next to the Sleeper site, so the roster is squi
 
 ## System Files
 
-| path | what |
-|---|---|
-| `RESEARCH_PROMPT.md` | The prompt you run 1–2 hours before the draft. Produces the three CSVs. |
-| `config.yaml` | League ids, model settings, LLM backend, strategy notes. |
-| `data/players.csv`, `stacks.csv`, `anti.csv` | Research output. Put them here. |
-| `data/league.json` | Written by `setup`: roster slots, scoring, draft order, your picks. |
-| `data/players_nfl.json` | Sleeper player table, cached 24h. |
-| `out/card_latest.md` | Current card. Re-written on every board change. |
-| `out/state.json` | Current state + full candidate table (for a second screen). |
-| `out/log.jsonl` | Every pick, every card, every candidate set at your turns. |
-| `out/packet_<pick>.json` | Exactly what the LLM saw for each of your picks. |
-| `out/teamstate_<pick>.md` | Post-pick team-state analysis after each of your picks. |
-| `out/script.csv` | Pre-draft survival at each of your picks. |
-| `tools/make_fake_research.py` | Synthetic research for dry runs: `python tools/make_fake_research.py data` (overwrites `data/*.csv`). |
+| path                                               | what                                                                                                     |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `RESEARCH_PROMPT.md`                             | The prompt you run 1–2 hours before the draft. Produces the three CSVs.                                 |
+| `config.yaml`                                    | League ids, model settings, LLM backend, strategy notes.                                                 |
+| `data/players.csv`, `stacks.csv`, `anti.csv` | Research output. Put them here.                                                                          |
+| `data/league.json`                               | Written by`setup`: roster slots, scoring, draft order, your picks.                                     |
+| `data/players_nfl.json`                          | Sleeper player table, cached 24h.                                                                        |
+| `out/card_latest.md`                             | Current card. Re-written on every board change.                                                          |
+| `out/state.json`                                 | Current state + full candidate table (for a second screen).                                              |
+| `out/log.jsonl`                                  | Every pick, every card, every candidate set at your turns.                                               |
+| `out/packet_<pick>.json`                         | Exactly what the LLM saw for each of your picks.                                                         |
+| `out/teamstate_<pick>.md`                        | Post-pick team-state analysis after each of your picks.                                                  |
+| `out/script.csv`                                 | Pre-draft survival at each of your picks.                                                                |
+| `tools/make_fake_research.py`                    | Synthetic research for dry runs:`python tools/make_fake_research.py data` (overwrites `data/*.csv`). |
 
 ## Caviots / Known Gaps
 
-- Sleeper's API exposes picks, draft settings, order, and `last_picked`; it does not say who is on autodraft or expose the clock directly, so both are inferred. 
+- Sleeper's API exposes picks, draft settings, order, and `last_picked`; it does not say who is on autodraft or expose the clock directly, so both are inferred.
 - ADP is a model of the average league, not yours. If your league is RB-heavy or reaches for homers, calibrate `sigma_slope` up (more chaos) and `run_shift` up (they chase runs); In these cases `surv` for the top 2–3 candidates is what matters.
-- The `last_picked` timestamp should be checked once on a live draft - if it lags, the poller's own observation times are used and clock display is approximate. 
-- `search_rank` from the player table stands in for Sleeper's autodraft ranking; if you capture the draft room's own rankings, add a `sleeper_rank` column to `players.csv` and it overrides `search_rank`. 
+- The `last_picked` timestamp should be checked once on a live draft - if it lags, the poller's own observation times are used and clock display is approximate.
+- `search_rank` from the player table stands in for Sleeper's autodraft ranking; if you capture the draft room's own rankings, add a `sleeper_rank` column to `players.csv` and it overrides `search_rank`.
 - Players drafted who aren't in your research table are tracked as taken but contribute nothing to opponent-need estimates - this is now the normal path for DEF (still unmodeled by design; K is a modeled, VORP'd position, see **Kickers** above) and for anything else missing from `players.csv`.
 - The mock's opponents draft from the same ADP model the survival sim uses.
 - Mock-only settings for exercising the harness offline: `mock.autodraft_slots` forces which slots autodraft (overrides the random `autodraft_teams` count); `mock.fault_at_pick` / `mock.fault_n_polls` inject `ConnectionError` for N consecutive polls starting at a given pick, to test the reconnect ladder; `llm.backend: fake` with `llm.fake_delay_s` returns a canned card after a delay, for exercising the LLM queue without burning real calls.

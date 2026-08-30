@@ -21,7 +21,7 @@ Long-form descriptions for all fields in `config.yaml`. Values here override cod
 | `top_n` | `12` | Candidates ranked in the dashboard table and sent to the live-draft LLM. |
 | `seed` | `0` | RNG seed for the Monte Carlo. 0 = random each run; set it to make sims reproducible. |
 
-## `mc.*` — Monte Carlo survival model
+## Monte Carlo survival model (`mc.*`)
 
 Simulation of the opponent picks between now and your next pick to answer "who is still on the board when it's my turn?". The `surv`, `wait_cost` (via expected best VORP at your next pick), and `tier_empty_p` are derived from this.
 
@@ -40,7 +40,7 @@ Simulation of the opponent picks between now and your next pick to answer "who i
 | `mc.tendency_prior_picks` | `4` | Shrinkage for the learned style: estimates blend toward neutral until a slot has more than this many picks, so one wild pick doesn't rewrite a drafter's profile. |
 | `mc.lean_shift` | `1.0` | Scale of the positional-lean shift: σ per 100% lean vs the room's position share. |
 
-## `scoring.*` — deterministic candidate ranking
+## Deterministic Candidate Ranking (`scoring.*`)
 
 Produces `adj = wait_w[tag]·max(wait_cost,0) + vorp_weight·vorp_eff + need + stack − anti − risk_pen`.
 - Bye weeks are deliberately **not** in `adj` — they surface as warnings (`bye_team_count`) and shade the BACKUP bonus instead. 
@@ -67,7 +67,7 @@ Produces `adj = wait_w[tag]·max(wait_cost,0) + vorp_weight·vorp_eff + need + s
 | `scoring.stack_max_bonus` | `6.0` | Points at `stack_score` 100 for correlating with your QB/receivers (scales linearly with the researched score). |
 | `scoring.bye_cost_per_collision` | *(removed)* | Bye cost no longer enters `adj`; kept only for the display column. |
 
-## `llm.*` — the Claude card and team analysis
+## Model card and Backend (`llm.*`)
 
 All calls run through one FIFO worker queue: jobs are never cancelled, the panel keeps the
 previous card until a finished job replaces it, and post-pick analysis always completes
@@ -90,11 +90,9 @@ before the next card fires.
 
 ## `strategy_notes`
 
-Free text passed verbatim to the card model and the post-pick analysis — your draft
-philosophy in prose (round ranges, positional rules, stack policy). This is the paramount
-lever for steering the SLEEPER pick; the deterministic scorer never reads it.
+Free text passed verbatim to the card model and the post-pick analysis — your draft philosophy in prose (round ranges, positional rules, stack policy). This is the paramount lever for steering the SLEEPER pick; the deterministic scorer never reads it.
 
-## `mock.*` — offline dry runs (`python -m sleeper_agent mock`)
+## Offline dry runs (`mock.*`, `python -m sleeper_agent mock`)
 
 | key | default | role |
 |---|---|---|

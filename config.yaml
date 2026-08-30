@@ -1,0 +1,71 @@
+# --- Sleeper ---------------------------------------------------------------
+# from league URL: sleeper.com/leagues/<league_id>
+league_id: ""
+# optional; defaults to the league's current draft      
+draft_id: ""
+# your Sleeper username -> my_slot once the draft order is posted     
+username: ""
+my_slot: null  # override if username lookup fails
+
+# --- API --------------------------------------------------------------------
+data_dir: data
+out_dir: out
+poll_interval: 2.0     # seconds between /picks polls
+top_n: 8               # candidates shown / sent to the LLM
+seed: 0                # 0 = random
+
+# --- Monte Carlo survival ---------------------------------------------------
+mc:
+  sims: 2500
+  pool: 80                  # top-N available by ADP simulated as pickable (auto-raised to cover the window)
+  sigma_base: 1.0           # ADP std dev = sigma_base + sigma_slope * adp  (pick 50 -> ~7 picks)
+  sigma_slope: 0.12
+  run_shift: 0.4            # std devs: each same-position pick in the last run_window picks pulls that position up
+  run_window: 4
+  need_shift: {STARTER: 0, FLEX: 0.5, BENCH: 1.5, URGENT: 1.0, CAPPED: 20} # std devs added to a team's board
+  autodraft_latency_s: 4.0  # median pick latency below this => classified autodraft
+  autodraft_slots: []       # force slots to autodraft, e.g. [3, 9]
+  pos_caps: {QB: 2, TE: 2, RB: 7, WR: 7}
+
+# --- Deterministic scoring --------------------------------------------------
+scoring:
+  ceiling_blend: {1: 0.0, 6: 0.15, 9: 0.30, 11: 0.50}  # round -> weight on (ceil - proj)
+  need_weight: 6.0                                     # pts bonus for filling an open starting slot
+  bye_cost_per_collision: 4.0                          # pts per same-slot bye collision
+  stack_max_bonus: 6.0                                 # pts at stack_score 100
+  risk_weight: 1.0                                     # pts per risk point (halved after round 6)
+  replacement_extra: {QB: 3, RB: 2, WR: 2, TE: 2}      # replacement = last starter + this many (QB/TE: streamable)
+  vorp_weight: 0.15                                    # adj = wait_cost + vorp_weight*vorp + need + stack - bye - anti - risk
+  bench_penalty: {QB: 12.0, TE: 9.0, RB: 2.0, WR: 2.0} # pts against a bench-only pick, x depth
+  bench_free_round: 9                                  # bench penalties halve from this round
+  pos_caps: {QB: 3, TE: 2, RB: 7, WR: 7}
+
+# --- LLM card ---------------------------------------------------------------
+llm:
+  backend: claude-cli  # claude-cli | anthropic | openai-compat | none
+  model: "claude-opus-4-8"  # empty = backend default. openai-compat: the provider's model id;
+                            # on OpenRouter append :online for built-in web search (e.g. gpt-4o:online)
+                            # claude-cli = Claude subscription, anthropic = api billing          
+  base_url: "" # openai-compat only, 
+               # e.g. https://openrouter.ai/api/v1, https://api.openai.com/v1, http://localhost:11434/v1 (ollama)
+  api_key_env: LLM_API_KEY  # env var holding the key; unset = no auth header (local models)
+  at_n_minus_2: true  # if true, generate a card two picks out (costs one extra call per turn)
+  timeout_s: 90
+
+strategy_notes: >
+  Balanced build. Rounds 1-5 prefer floor and LOCKED roles. Do not take a second TE before round 12
+  or a second QB before round 11. A stack with my QB breaks ties inside a tier only. Rounds 11-14:
+  ceiling, handcuffs of my RBs, one IR_STASH if available.
+
+# --- Mock draft (draftkit mock) ---------------------------------------------
+mock:
+  teams: 12
+  rounds: 14
+  my_slot: 10
+  pick_timer: 180
+  roster_positions: [QB, RB, RB, WR, WR, TE, FLEX, FLEX, BN, BN, BN, BN, BN, BN, IR]
+  autodraft_teams: 3
+  human_min_s: 8
+  human_max_s: 45
+  my_pick_delay_s: 20
+  speed: 10             # wall-clock divisor

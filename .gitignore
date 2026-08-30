@@ -1,0 +1,5 @@
+out/
+data/players_nfl.json
+data/players_resolved.csv
+data/league.json
+__pycache__/

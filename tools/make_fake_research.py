@@ -1,5 +1,5 @@
 """Generate synthetic players.csv / stacks.csv / anti.csv with the real schema.
-Names are fake; only for `draftkit mock --offline` and validating the pipeline."""
+Names are fake; only for `python -m sleeper_agent mock --offline` and validating the pipeline."""
 import os
 import sys
 

@@ -37,12 +37,17 @@ class Slots:
             elif s == "IR":
                 ir += 1
             else:
-                ignored.append(s)     # K, DEF, etc. — not modeled
+                ignored.append(s)     # DEF etc. - not modeled, but still consumes a draft round
         return cls(fixed=fixed, flex=flex, bench=bench, ir=ir, ignored=ignored)
 
     @property
     def starters(self) -> int:
         return sum(self.fixed.values()) + len(self.flex)
+
+    @property
+    def ignored_startable(self) -> int:
+        """Startable slots we don't model (DEF): each still eats a late round."""
+        return len(self.ignored)
 
 
 def replacement_levels(players: pd.DataFrame, teams: int, slots: Slots, value_col: str = "proj",
@@ -160,27 +165,74 @@ def anti_penalty(cand: pd.Series, roster: pd.DataFrame, anti: pd.DataFrame) -> t
     return pen, who
 
 
-def need_bonus(pos: str, fixed_open: dict[str, int], flex_open: int, slots: Slots, roster_counts: dict[str, int],
-               rnd: int, rounds: int, cfg: dict) -> tuple[float, str]:
+def roster_needs(roster: pd.DataFrame, slots: Slots, cfg: dict) -> dict:
+    """Once-per-tick roster context: open starters, per-position backup deficits,
+    and same-position byes (for backup diversity)."""
+    counts = roster["pos"].value_counts().to_dict() if len(roster) else {}
+    if len(roster):
+        fixed_open, flex_open, bench_pids = roster_fill(roster, slots)
+    else:
+        fixed_open, flex_open, bench_pids = dict(slots.fixed), len(slots.flex), []
+    targets = cfg.get("backup_targets", {})
+    bench_pos = roster.loc[bench_pids]["pos"].value_counts().to_dict() if bench_pids else {}
+    backup_open = {}
+    for p in POS:
+        if slots.fixed.get(p, 0) == 0 and not any(p in e for e in slots.flex):
+            continue                                    # position not startable in this league
+        tgt = int(targets.get(p, min(slots.fixed.get(p, 0), 2)))
+        backup_open[p] = max(0, tgt - bench_pos.get(p, 0))
+    pos_byes = {p: set(roster.loc[roster["pos"] == p, "bye"].astype(int)) for p in POS} if len(roster) else {p: set() for p in POS}
+    return {
+        "counts": counts, "fixed_open": fixed_open, "flex_open": flex_open,
+        "bench_pos": bench_pos, "backup_open": backup_open, "pos_byes": pos_byes,
+        # the gate never counts K: a missing kicker must not block depth picks
+        "starters_open_gate": sum(n for p, n in fixed_open.items() if p != "K") + flex_open,
+        "backups_open_total": sum(backup_open.values()),
+    }
+
+
+def need_bonus(pos: str, bye: int, ctx: dict, slots: Slots, rnd: int, rounds: int, cfg: dict) -> tuple[float, str, str]:
+    """Roster-phase classifier: fill starters, then direct backups, then maximize.
+    Returns (points, tag, note). Tags: STARTER FLEX BACKUP DEPTH CAPPED K-WAIT."""
     w = float(cfg.get("need_weight", 6.0))
     caps = cfg.get("pos_caps", {})
-    if roster_counts.get(pos, 0) >= int(caps.get(pos, 99)):
-        return -3 * w, "CAPPED"
-    open_starters = sum(fixed_open.values()) + flex_open
-    rounds_left = rounds - rnd + 1
-    urgency = 2.0 if rounds_left <= open_starters + 1 else 1.0
+    bp = cfg.get("bench_penalty", {"QB": 12.0, "TE": 9.0, "RB": 2.0, "WR": 2.0, "K": 15.0})
+    if ctx["counts"].get(pos, 0) >= int(caps.get(pos, 99)):
+        return -float(cfg.get("capped_multiplier", 3.0)) * w, "CAPPED", ""
+    fixed_open, flex_open = ctx["fixed_open"], ctx["flex_open"]
+    # DEF etc. still eat a round each, so the endgame squeeze comes one round early per ignored slot
+    rounds_left = rounds - rnd + 1 - slots.ignored_startable
+    open_all = sum(fixed_open.values()) + flex_open
+    endgame = rounds_left <= open_all + 1
+    urgency = float(cfg.get("urgency_factor", 2.0)) if endgame else 1.0
+    if pos == "K" and fixed_open.get("K", 0) > 0 and not endgame:
+        return -float(bp.get("K", 15.0)), "K-WAIT", "kicker waits for the endgame"
     if fixed_open.get(pos, 0) > 0:
-        return w * urgency, "STARTER"
+        return w * urgency, "STARTER", ""
     if flex_open > 0 and any(pos in e for e in slots.flex):
-        return 0.5 * w * urgency, "FLEX"
-    # bench: per-position penalty for the first bench body, growing with depth.
-    # Onesie positions (QB, TE in 1-TE leagues) carry a large penalty because a
-    # backup rarely starts; RB/WR benches are injury insurance and cheap.
-    bp = cfg.get("bench_penalty", {"QB": 12.0, "TE": 9.0, "RB": 2.0, "WR": 2.0})
-    depth = max(1, roster_counts.get(pos, 0) - slots.fixed.get(pos, 0) - sum(1 for e in slots.flex if pos in e) + 1)
-    late = rnd >= int(cfg.get("bench_free_round", 11))
+        return 0.5 * w * urgency, "FLEX", ""
+    # the backup phase only opens once every (non-K) starter is filled -
+    # until then a would-be backup is just depth and falls through to the gate
+    if ctx["backup_open"].get(pos, 0) > 0 and ctx["starters_open_gate"] == 0:
+        pts = float(cfg.get("backup_weight", 0.8)) * w * urgency
+        # a backup only covers the starter if their byes differ
+        if int(bye) in ctx["pos_byes"].get(pos, set()):
+            pts *= float(cfg.get("backup_bye_overlap_factor", 0.4))
+            return pts, "BACKUP", f"bye {int(bye)} overlaps my {pos}s - weak cover"
+        return pts, "BACKUP", ""
+    # DEPTH: everything past starters + backup targets. Heavily gated while
+    # starters (non-K) are open, lightly gated while backup targets are open.
+    depth = ctx["bench_pos"].get(pos, 0) + 1
+    late = rnd >= int(cfg.get("bench_free_round", 9))
     pen = float(bp.get(pos, 2.0)) * depth * (0.5 if late else 1.0)
-    return -pen, "BENCH"
+    note = ""
+    if ctx["starters_open_gate"] > 0:
+        pen += float(cfg.get("depth_while_starters_open", 15.0))
+        note = "starters still open"
+    elif ctx["backups_open_total"] > 0:
+        pen += float(cfg.get("depth_while_backups_open", 6.0))
+        note = "backup slots still open"
+    return -pen, "DEPTH", note
 
 
 # ---------------------------------------------------------------------------
@@ -197,8 +249,6 @@ def candidate_table(players: pd.DataFrame, taken: set[str], my_pids: list[str], 
     df["vorp"] = df["val"] - df["pos"].map(repl)
     avail = df[~df.index.isin(taken)].copy()
     roster = players.loc[[p for p in my_pids if p in players.index]]
-    roster_counts = roster["pos"].value_counts().to_dict() if len(roster) else {}
-    fixed_open, flex_open, _ = roster_fill(roster, slots) if len(roster) else (dict(slots.fixed), len(slots.flex), [])
 
     surv = (mc or {}).get("surv", {})
     e_next = (mc or {}).get("pos_expect", {})
@@ -208,28 +258,34 @@ def candidate_table(players: pd.DataFrame, taken: set[str], my_pids: list[str], 
     # not his own position's. (TE vorp over TE12 overstates a TE in the flex.)
     flex_elig = set().union(*slots.flex) if slots.flex else set()
     flex_repl = max([repl[p] for p in flex_elig], default=0.0)
+    ctx = roster_needs(roster, slots, cfg)
+    wait_w_map = {"STARTER": 1.0, "FLEX": 0.8, "BACKUP": 0.6, "DEPTH": 0.15, "CAPPED": 0.0, "K-WAIT": 0.0}
+    wait_w_map.update({k: float(v) for k, v in (cfg.get("wait_w") or {}).items()})
+    roster_byes = roster["bye"].astype(int) if len(roster) else pd.Series(dtype=int)
 
     rows = []
     for pid, r in avail.iterrows():
         pos = r["pos"]
         wait_cost = float(r["vorp"] - e_next.get(pos, r["vorp"]))     # what I lose by waiting a turn
-        nb, need_tag = need_bonus(pos, fixed_open, flex_open, slots, roster_counts, rnd, rounds, cfg)
+        nb, need_tag, need_note = need_bonus(pos, int(r["bye"]), ctx, slots, rnd, rounds, cfg)
         # waiting only costs something if I actually intend to fill the slot
-        wait_w = {"STARTER": 1.0, "FLEX": 0.8, "BENCH": 0.3, "CAPPED": 0.0}[need_tag]
+        wait_w = wait_w_map.get(need_tag, 0.0)
         vorp_eff = float(r["vorp"])
-        if need_tag in ("FLEX", "BENCH") and pos in flex_elig:
+        if need_tag in ("FLEX", "BACKUP", "DEPTH") and pos in flex_elig:
             vorp_eff -= max(0.0, flex_repl - repl[pos])
+        # bye collisions are draft-dependent: displayed and warned about, never scored
         bc, bye_with = bye_cost(r, roster, slots, float(cfg.get("bye_cost_per_collision", 4.0)))
+        bye_team_count = int((roster_byes == int(r["bye"])).sum())
         sb, stack_with = stack_bonus(r, roster, stacks, float(cfg.get("stack_max_bonus", 6.0)))
         ap, anti_with = anti_penalty(r, roster, anti)
         risk_pen = float(cfg.get("risk_weight", 1.0)) * float(r["risk"]) * (1.0 if rnd <= 6 else 0.5)
-        adj = wait_w * max(wait_cost, 0.0) + float(cfg.get("vorp_weight", 0.15)) * vorp_eff + nb + sb - bc - ap - risk_pen
+        adj = wait_w * max(wait_cost, 0.0) + float(cfg.get("vorp_weight", 0.15)) * vorp_eff + nb + sb - ap - risk_pen
         rows.append({
             "pid": pid, "name": r["name"], "pos": pos, "team": r["team"], "bye": int(r["bye"]),
             "tier": int(r["tier"]), "proj": round(float(r["proj"]), 1), "vorp": round(float(r["vorp"]), 1),
             "adp": float(r["adp"]), "surv": float(surv.get(pid, 1.0)),
-            "wait_cost": round(wait_cost, 1), "need": need_tag, "need_pts": round(nb, 1),
-            "bye_cost": round(bc, 1), "bye_with": ", ".join(bye_with),
+            "wait_cost": round(wait_cost, 1), "need": need_tag, "need_pts": round(nb, 1), "need_note": need_note,
+            "bye_cost": round(bc, 1), "bye_with": ", ".join(bye_with), "bye_team_count": bye_team_count,
             "stack": round(sb, 1), "stack_with": stack_with, "anti": round(ap, 1), "anti_with": anti_with,
             "risk": int(r["risk"]), "role": r["role"], "inj": r["inj"], "tags": r["tags"],
             "tier_empty_p": float(tier_empty.get((pos, int(r["tier"])), 0.0)),
@@ -237,7 +293,8 @@ def candidate_table(players: pd.DataFrame, taken: set[str], my_pids: list[str], 
         })
     out = pd.DataFrame(rows).sort_values(["adj", "vorp"], ascending=False)
     out.attrs["replacement"] = repl
-    out.attrs["fixed_open"] = fixed_open
-    out.attrs["flex_open"] = flex_open
+    out.attrs["fixed_open"] = ctx["fixed_open"]
+    out.attrs["flex_open"] = ctx["flex_open"]
+    out.attrs["backup_open"] = ctx["backup_open"]
     out.attrs["e_next"] = e_next
     return out.head(top_n) if top_n else out

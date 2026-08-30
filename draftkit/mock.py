@@ -1,4 +1,4 @@
-"""A fake Sleeper draft for dry runs. Same interface as the real client (picks/draft)."""
+"""Run a mock Sleeper draft for dry runs (same interface as real client)."""
 from __future__ import annotations
 
 import time
@@ -20,9 +20,12 @@ class MockSleeper:
         self.order = pick_order(meta)
         self.slots = Slots.from_roster_positions(meta.roster_positions)
         mcfg = cfg.get("mock", {})
-        n_auto = int(mcfg.get("autodraft_teams", 3))
         others = [s for s in range(1, meta.teams + 1) if s != meta.my_slot]
-        self.autodraft = set(self.rng.choice(others, size=min(n_auto, len(others)), replace=False).tolist())
+        if mcfg.get("autodraft_slots"):
+            self.autodraft = set(int(s) for s in mcfg["autodraft_slots"] if int(s) != meta.my_slot)
+        else:
+            n_auto = int(mcfg.get("autodraft_teams", 3))
+            self.autodraft = set(self.rng.choice(others, size=min(n_auto, len(others)), replace=False).tolist())
         self.human_lat = {s: float(self.rng.uniform(mcfg.get("human_min_s", 8), mcfg.get("human_max_s", 45))) for s in others}
         self.my_delay = float(mcfg.get("my_pick_delay_s", 20))
         self._picks: list[dict] = []
@@ -32,6 +35,9 @@ class MockSleeper:
         self._my_choice: str | None = None
         self._my_choice_at: float | None = None
         self.last_picked = int(time.time() * 1000)
+        self.fault_at_pick = int(mcfg.get("fault_at_pick", 0))
+        self.fault_n_polls = int(mcfg.get("fault_n_polls", 0))
+        self._fault_fired = 0
 
     # -- the harness registers what it would pick ---------------------------
     def queue_my_pick(self, pid: str, delay_s: float | None = None):
@@ -79,6 +85,9 @@ class MockSleeper:
 
     # -- Sleeper-shaped API ------------------------------------------------
     def picks(self, draft_id: str) -> list[dict]:
+        if self.fault_at_pick and len(self._picks) >= self.fault_at_pick and self._fault_fired < self.fault_n_polls:
+            self._fault_fired += 1
+            raise ConnectionError("mock fault injection")
         self._advance()
         return list(self._picks)
 

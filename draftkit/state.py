@@ -69,7 +69,8 @@ def round_and_pick(pick_no: int, teams: int) -> tuple[int, int]:
 class DraftState:
     """Mutable view of the draft built from successive /picks responses."""
 
-    def __init__(self, meta: DraftMeta, autodraft_latency_s: float = 4.0, forced_autodraft: list[int] | None = None):
+    def __init__(self, meta: DraftMeta, autodraft_latency_s: float = 3.0, forced_autodraft: list[int] | None = None,
+                 batch_gap_s: float = 1.0):
         self.meta = meta
         self.order = pick_order(meta)
         self.my_picks = my_pick_numbers(meta)
@@ -80,7 +81,9 @@ class DraftState:
         self.last_pick_seen_at: float | None = None
         self.last_picked_ms: int | None = None      # from draft object, if polled
         self.autodraft_latency_s = autodraft_latency_s
+        self.batch_gap_s = batch_gap_s              # gap estimate for picks that arrive batched in one poll
         self.forced_autodraft = set(forced_autodraft or [])
+        self._pending_fix: tuple[int, int] | None = None   # (slot, latency idx) to upgrade to server time
         self.status = "pre_draft"
         self.started_at: float | None = None
 
@@ -90,17 +93,20 @@ class DraftState:
         now = now or time.time()
         picks = sorted(picks, key=lambda p: p["pick_no"])
         new = picks[len(self.picks):]
+        self._pending_fix = None
         for i, p in enumerate(new):
             slot = int(p.get("draft_slot") or self.order[p["pick_no"] - 1])
             pid = str(p["player_id"])
             self.picks.append(p)
             self.taken.add(pid)
             self.rosters.setdefault(slot, []).append(pid)
-            # latency: time since the previous pick was observed. Several picks in
-            # one poll => all but the first were near-instant.
+            # latency: time since the previous pick was observed. Picks batched in
+            # one poll were fast, but not literally 0s - estimate half a poll.
             if self.last_pick_seen_at is not None:
-                lat = 0.0 if i > 0 else max(0.0, now - self.last_pick_seen_at)
+                lat = self.batch_gap_s if i > 0 else max(0.0, now - self.last_pick_seen_at)
                 self.latency[slot].append(lat)
+                if len(new) == 1:
+                    self._pending_fix = (slot, len(self.latency[slot]) - 1)
             self.last_pick_seen_at = now
         if new and self.started_at is None:
             self.started_at = now
@@ -110,7 +116,16 @@ class DraftState:
         self.status = draft.get("status", self.status)
         lp = draft.get("last_picked")
         if lp:
-            self.last_picked_ms = int(lp)
+            lp = int(lp)
+            # exactly one new pick this poll and a fresh server timestamp:
+            # replace the observation gap with the server-side gap
+            if self._pending_fix and self.last_picked_ms and lp > self.last_picked_ms:
+                slot, idx = self._pending_fix
+                gap = (lp - self.last_picked_ms) / 1000.0
+                if 0.0 <= gap < 4 * self.meta.pick_timer and idx < len(self.latency.get(slot, [])):
+                    self.latency[slot][idx] = gap
+            self._pending_fix = None
+            self.last_picked_ms = lp
 
     # --- derived -------------------------------------------------------
     @property
@@ -174,9 +189,11 @@ class DraftState:
         if slot in self.forced_autodraft:
             return True
         lat = self.latency.get(slot, [])
-        if len(lat) < 2:
+        if len(lat) < 3:
             return False
-        return statistics.median(lat) < self.autodraft_latency_s
+        # min(median, mean): the mean drags down fast if a team flips autodraft
+        # on mid-draft, while the median guards against one-off snap picks
+        return min(statistics.median(lat), statistics.fmean(lat)) < self.autodraft_latency_s
 
     def autodraft_slots(self) -> set[int]:
         return {s for s in range(1, self.meta.teams + 1) if self.is_autodraft(s)}
@@ -185,11 +202,21 @@ class DraftState:
         lat = self.latency.get(slot, [])
         return statistics.median(lat) if lat else default
 
+    def mean_latency(self, slot: int, default: float = 60.0) -> float:
+        lat = self.latency.get(slot, [])
+        return statistics.fmean(lat) if lat else default
+
+    def expected_latency(self, slot: int, default: float = 60.0) -> float:
+        lat = self.latency.get(slot, [])
+        if not lat:
+            return default
+        return min(statistics.median(lat), statistics.fmean(lat))
+
     def eta_to_my_pick_s(self) -> float | None:
         nxt = self.next_my_pick()
         if nxt is None:
             return None
-        return sum(self.median_latency(s) for s in self.slots_between(self.current_pick_no, nxt))
+        return sum(self.expected_latency(s) for s in self.slots_between(self.current_pick_no, nxt))
 
     def recent_positions(self, players_pos: dict[str, str], k: int = 4) -> list[str]:
         return [players_pos.get(str(p["player_id"]), "?") for p in self.picks[-k:]]

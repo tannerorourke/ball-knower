@@ -1,4 +1,4 @@
-"""draftkit command line: setup | validate | script | run | mock"""
+"""sleeper-agent command line: setup | validate | script | run | mock"""
 from __future__ import annotations
 
 import argparse
@@ -21,19 +21,30 @@ from .state import DraftMeta, DraftState, my_pick_numbers, round_and_pick
 
 DEFAULTS = {
     "league_id": "", "draft_id": "", "username": "", "my_slot": None,
-    "data_dir": "data", "out_dir": "out", "poll_interval": 2.0, "top_n": 8, "seed": 0,
+    "data_dir": "data", "out_dir": "out", "poll_interval": 2.0, "top_n": 12, "seed": 0,
     "mc": {"sims": 2000, "pool": 80, "sigma_base": 1.0, "sigma_slope": 0.12, "run_shift": 0.4, "run_window": 4,
-           "need_shift": {"STARTER": 0, "FLEX": 0.5, "BENCH": 1.5, "URGENT": 1.0, "CAPPED": 20},
-           "autodraft_latency_s": 4.0, "autodraft_slots": [], "pos_caps": {"QB": 2, "TE": 2, "RB": 7, "WR": 7}},
+           "need_shift": {"STARTER": 0, "FLEX": 0.5, "BACKUP": 1.0, "DEPTH": 1.5, "URGENT": 1.0, "CAPPED": 20},
+           "autodraft_latency_s": 3.0, "autodraft_slots": [], "pos_caps": {"QB": 2, "TE": 2, "RB": 7, "WR": 7, "K": 1},
+           "slot_tendencies": True, "tendency_prior_picks": 4, "lean_shift": 1.0},
     "scoring": {"ceiling_blend": {1: 0.0, 6: 0.15, 9: 0.3, 11: 0.5}, "need_weight": 6.0,
-                "bye_cost_per_collision": 4.0, "stack_max_bonus": 6.0, "risk_weight": 1.0,
-                "replacement_extra": {"QB": 3, "RB": 2, "WR": 2, "TE": 2}, "vorp_weight": 0.15,
-                "bench_penalty": {"QB": 12.0, "TE": 9.0, "RB": 2.0, "WR": 2.0}, "bench_free_round": 11,
-                "pos_caps": {"QB": 2, "TE": 2, "RB": 7, "WR": 7}},
-    "llm": {"backend": "none", "model": "", "base_url": "", "api_key_env": "LLM_API_KEY", "at_n_minus_2": False, "timeout_s": 90},
+                "backup_weight": 0.8, "backup_targets": {"QB": 1, "RB": 2, "WR": 2, "TE": 1, "K": 0},
+                "depth_while_starters_open": 15.0, "depth_while_backups_open": 6.0,
+                "backup_bye_overlap_factor": 0.4,
+                "wait_w": {"STARTER": 1.0, "FLEX": 0.8, "BACKUP": 0.6, "DEPTH": 0.15, "CAPPED": 0.0, "K-WAIT": 0.0},
+                "capped_multiplier": 3.0, "urgency_factor": 2.0,
+                "stack_max_bonus": 6.0, "risk_weight": 1.0,
+                "replacement_extra": {"QB": 3, "RB": 2, "WR": 2, "TE": 2, "K": 1}, "vorp_weight": 0.15,
+                "bench_penalty": {"QB": 12.0, "TE": 9.0, "RB": 2.0, "WR": 2.0, "K": 15.0}, "bench_free_round": 9,
+                "pos_caps": {"QB": 3, "TE": 2, "RB": 7, "WR": 7, "K": 1}},
+    "llm": {"backend": "none", "research_model": "", "draft_model": "",
+            "base_url": "", "api_key_env": "LLM_API_KEY",
+            "research_timeout_s": 900, "draft_timeout_s": 90,
+            "at_n_minus": False, "n_minus": 2, "eta_trigger_s": 60, "post_pick": True},
     "strategy_notes": "",
-    "mock": {"autodraft_teams": 3, "human_min_s": 8, "human_max_s": 45, "my_pick_delay_s": 20, "speed": 10,
+    "mock": {"autodraft_teams": 3, "autodraft_slots": [], "human_min_s": 8, "human_max_s": 45,
+             "my_pick_delay_s": 20, "speed": 10,
              "teams": 12, "rounds": 14, "my_slot": 5, "pick_timer": 180,
+             "fault_at_pick": 0, "fault_n_polls": 0,
              "roster_positions": ["QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "FLEX", "BN", "BN", "BN", "BN", "BN", "BN", "IR"]},
 }
 
@@ -137,7 +148,7 @@ def cmd_validate(cfg, args):
     out = os.path.join(cfg["data_dir"], "players_resolved.csv")
     pl.assign(vorp=(pl["proj"] - pl["pos"].map(repl)).round(1)).to_csv(out, index=False)
     print(f"\nwrote {out}")
-    print("RESULT:", "OK" if res.ok else "ERRORS — fix before draft day")
+    print("RESULT:", "OK" if res.ok else "ERRORS - fix before draft day")
     return 0 if res.ok else 1
 
 
@@ -236,9 +247,10 @@ def cmd_mock(cfg, args):
     if args.slot:
         meta.my_slot = int(args.slot)
     speed = float(args.speed or cfg["mock"]["speed"])
-    # latencies are divided by speed in the mock, so the autodraft detector must be too
+    # latencies are divided by speed in the mock, so the time-based detectors must be too
     cfg = dict(cfg)
     cfg["mc"] = dict(cfg["mc"], autodraft_latency_s=float(cfg["mc"]["autodraft_latency_s"]) / speed)
+    cfg["llm"] = dict(cfg["llm"], eta_trigger_s=float(cfg["llm"].get("eta_trigger_s", 60)) / speed)
     client = MockSleeper(meta, res.players, cfg, speed=speed, seed=int(args.seed))
     if args.no_llm:
         cfg = dict(cfg)
@@ -256,7 +268,7 @@ def cmd_mock(cfg, args):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(prog="draftkit")
+    ap = argparse.ArgumentParser(prog="sleeper-agent")
     ap.add_argument("-c", "--config", default="config.yaml")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("setup", help="fetch league/draft settings, cache players, print my picks")
@@ -267,7 +279,7 @@ def main(argv=None):
                     help="shard grain: one agent per team (default, most accurate) or per division (faster)")
     rs.add_argument("--parallel", type=int, default=4)
     rs.add_argument("--model", default="")
-    rs.add_argument("--timeout", type=float, default=900)
+    rs.add_argument("--timeout", type=float, default=None, help="override llm.research_timeout_s")
     rs.add_argument("--write-only", action="store_true", help="just write shard prompts for manual use in any LM")
     rs.add_argument("--from-replies", action="store_true", help="merge saved shard replies (shard_*_reply.md) into the final CSVs")
     rs.add_argument("--offline", action="store_true")

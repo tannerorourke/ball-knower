@@ -7,16 +7,40 @@ import time
 
 import requests
 
+from .data import POS
+from .scoring import FLEX_DEFS
+
 BASE = "https://api.sleeper.app/v1"
-POSITIONS = {"QB", "RB", "WR", "TE"}
+
+
+def league_positions(data_dir: str) -> set[str]:
+    """Modeled positions this league can actually start, from league.json's
+    roster_positions (fixed slots + flex eligibility). Before `setup` has run
+    there is no league.json, so fall back to every modeled position — a
+    superset fetch is harmless and narrows once the league is known."""
+    lj = os.path.join(data_dir, "league.json")
+    if os.path.exists(lj):
+        try:
+            with open(lj) as f:
+                rp = json.load(f).get("roster_positions") or []
+            pos = {s for s in rp if s in POS}
+            for s in rp:
+                pos |= FLEX_DEFS.get(s, set())
+            pos &= set(POS)
+            if pos:
+                return pos
+        except Exception:  # noqa
+            pass
+    return set(POS)
 
 
 class Sleeper:
-    def __init__(self, data_dir: str = "data", timeout: float = 10.0):
+    def __init__(self, data_dir: str = "data", timeout: float = 10.0, positions: set[str] | None = None):
         self.s = requests.Session()
-        self.s.headers["User-Agent"] = "draftkit/0.1"
+        self.s.headers["User-Agent"] = "sleeper-agent/0.1"
         self.data_dir = data_dir
         self.timeout = timeout
+        self.positions = set(positions) if positions else league_positions(data_dir)
         os.makedirs(data_dir, exist_ok=True)
 
     def _get(self, path: str):
@@ -48,9 +72,9 @@ class Sleeper:
 
     # --- undocumented but long-stable endpoints ------------------------
     def projections(self, season: int) -> list:
-        """Full-season stat projections for all skill players, with Sleeper ADP."""
-        url = ("https://api.sleeper.com/projections/nfl/{s}?season_type=regular"
-               "&position[]=QB&position[]=RB&position[]=WR&position[]=TE&order_by=adp_half_ppr").format(s=season)
+        """Full-season stat projections for this league's positions, with Sleeper ADP."""
+        pos_q = "".join(f"&position[]={p}" for p in sorted(self.positions))
+        url = f"https://api.sleeper.com/projections/nfl/{season}?season_type=regular{pos_q}&order_by=adp_half_ppr"
         r = self.s.get(url, timeout=30)
         r.raise_for_status()
         return r.json()
@@ -77,7 +101,11 @@ class Sleeper:
             age_h = (time.time() - os.path.getmtime(path)) / 3600
             if age_h < max_age_hours:
                 with open(path) as f:
-                    return json.load(f)
+                    cached = json.load(f)
+                # a cache written under a narrower position filter must be refetched
+                have = {p.get("pos") for p in cached.values()}
+                if self.positions <= have:
+                    return cached
         data = self._get("/players/nfl")
         slim = {
             pid: {
@@ -94,7 +122,7 @@ class Sleeper:
                 "years_exp": p.get("years_exp"),
             }
             for pid, p in data.items()
-            if isinstance(p, dict) and p.get("position") in POSITIONS
+            if isinstance(p, dict) and p.get("position") in self.positions
         }
         with open(path, "w") as f:
             json.dump(slim, f)

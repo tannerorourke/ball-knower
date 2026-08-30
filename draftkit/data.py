@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 
-POS = ["QB", "RB", "WR", "TE"]
+POS = ["QB", "RB", "WR", "TE", "K"]     # modeled positions; leagues without a K slot just never rank one
 ROLE = {"LOCKED", "SHARED", "CONTESTED", "UNKNOWN"}
 INJ = {"OK", "Q", "D", "O", "PUP", "HOLDOUT", "SUSP"}
 TAGS = {"NEW_OC", "NEW_QB", "NEW_TEAM", "ROOKIE", "ROOKIE_THREAT", "HANDCUFF", "RZ_HOG", "YAC", "DEEP",

@@ -1,10 +1,13 @@
 """Build data/players_skeleton.csv from Sleeper's projections + schedule.
 
-One API call fills every numeric column: proj (raw stat projections scored with
-the league's exact scoring settings), Sleeper ADP, team, bye, age, and names
-that resolve to Sleeper ids exactly. The LLM research pass then only fills the
-judgment columns (floor/ceil/risk/role/inj/po_sched/tags) and the stacks/anti
-tables — no bulk data collection.
+One API call fills every numeric column: 
+  - names that resolve to Sleeper ids exactly.
+  - proj (raw stat projections scored with the league's exact scoring settings), 
+  - Sleeper ADP, 
+  - team, bye, age, and  
+
+LLM research pass then fills the judgment columns (floor/ceil/risk/role/inj/po_sched/tags) 
+and the stacks/anti tables.
 """
 from __future__ import annotations
 
@@ -18,10 +21,12 @@ import pandas as pd
 from .data import PLAYER_COLS, POS
 from .sleeper import Sleeper
 
-COUNTS = {"QB": 24, "RB": 70, "WR": 80, "TE": 24}
+COUNTS = {"QB": 24, "RB": 70, "WR": 80, "TE": 24, "K": 20}
 DEFAULT_SCORING = {"pass_td": 4, "pass_yd": 0.04, "pass_int": -1, "pass_2pt": 2,
                    "rush_td": 6, "rush_yd": 0.1, "rush_2pt": 2,
-                   "rec": 0.5, "rec_td": 6, "rec_yd": 0.1, "rec_2pt": 2, "fum_lost": -2}
+                   "rec": 0.5, "rec_td": 6, "rec_yd": 0.1, "rec_2pt": 2, "fum_lost": -2,
+                   "fgm_0_19": 3.0, "fgm_20_29": 3.0, "fgm_30_39": 3.0, "fgm_40_49": 4.0,
+                   "fgm_50p": 5.0, "xpm": 1.0, "fgmiss": -1.0}
 INJ_MAP = {"Questionable": "Q", "Doubtful": "D", "Out": "O", "PUP": "PUP", "IR": "O", "Sus": "SUSP", "COV": "O", "NA": "O", "DNR": "O"}
 
 
@@ -54,7 +59,7 @@ def build_skeleton(data_dir: str, season: int | None = None, scoring: dict | Non
         notes.append(f"season not in league.json; assuming {season}")
     if not scoring:
         scoring = DEFAULT_SCORING
-        notes.append("no league.json scoring; using default half-PPR — run `draftkit setup` first for exact points")
+        notes.append("no league.json scoring; using default half-PPR — run `python -m sleeper_agent setup` first for exact points")
 
     rec = float(scoring.get("rec", 0))
     adp_field = "adp_ppr" if rec >= 1 else ("adp_half_ppr" if rec > 0 else "adp_std")

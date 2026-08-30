@@ -1,7 +1,7 @@
 """Fan-out research: shard the judgment pass by NFL team across parallel agents.
 
 Two grains, both aligned to real cohesion: --by team (default, 32 agents; the
-whole context is one team — maximum accuracy, timing is free pre-draft) and
+whole context is one team - maximum accuracy, timing is free pre-draft) and
 --by division (8 agents of 4 teams; divisional weeks-15-17 rematches inform
 po_sched and division previews let one search serve four teams). Never by
 position: one team's news is one search context, and stacks/anti are intra-team
@@ -48,8 +48,9 @@ RULES = """Rules for the judgment columns (floor, ceil, risk, role, inj, po_sche
 - risk 0-5 int: 0 locked+healthy+prime age; 1 one minor concern; 2 moderate injury history OR mild role competition; 3 active injury designation OR real role competition OR age cliff (RB>=28, WR>=31, TE>=32); 4 two of those; 5 holdout/suspension/PUP/expected to miss >=3 games.
 - inj: OK | Q | D | O | PUP | HOLDOUT | SUSP (correct the skeleton where news is fresher).
 - floor ~20th-percentile season outcome, ceil ~80th; floor < proj < ceil always; widen for injury history, contested roles, rookies, new teams.
-- po_sched: weeks 15-17 matchup quality for the position, 1 brutal .. 5 soft. Weeks 15-17 are heavy with divisional rematches — if your teams are a division, you know several of these defenses; use that.
+- po_sched: weeks 15-17 matchup quality for the position, 1 brutal .. 5 soft. Weeks 15-17 are heavy with divisional rematches - if your teams are a division, you know several of these defenses; use that.
 - tags: 0-3 per row, |-separated, from exactly: NEW_OC, NEW_QB, NEW_TEAM, ROOKIE, ROOKIE_THREAT, HANDCUFF, RZ_HOG, YAC, DEEP, VOLUME, CONTRACT_YR, AGE_CLIFF, IR_STASH, INJ_HISTORY, BREAKOUT, DECLINE.
+- kicker rows (pos K): role LOCKED unless an open camp battle; risk 0-2 in almost all cases; keep floor/ceil tight (kicking volume is offense-driven, not skill-variance); tags rarely apply.
 stacks.csv: for each starting QB in YOUR teams, every RB/WR/TE on his team with >=12% projected target share (RB >=8%): qb,rec,team,stack_score,type,tgt_share,rz_share,adot. stack_score 0-100 (target share, red-zone share, QB pass volume; DEEP/high-aDOT profiles score the ceiling component higher than YAC). type: VOLUME|DEEP|RZ|YAC. Shares 0-1 two decimals, adot one decimal.
 anti.csv: same-team cannibal pairs in YOUR teams: p1,p2,team,penalty,reason. Always include committee RB pairs (penalty 6-10), top two WRs of a low-volume passing offense (3-5), rushing-heavy RB with his own QB (1-2). reason: COMMITTEE|TARGET_SHARE|RUSH_QB|GOAL_LINE. Penalty in season points, one decimal."""
 
@@ -62,7 +63,7 @@ Below is your slice of the draft board. The numeric columns name, pos, team, bye
 League: {league}
 
 Your job, for every row (players with adp <= 140 thoroughly; others only where you know something concrete):
-1. If you have web access: news sweep, last 48 hours, for your teams — injuries, holdouts, suspensions, depth chart, coaching changes, trades. No web access: use what you know; prefer UNKNOWN/defaults over guessing.
+1. If you have web access: news sweep, last 48 hours, for your teams - injuries, holdouts, suspensions, depth chart, coaching changes, trades. No web access: use what you know; prefer UNKNOWN/defaults over guessing.
 2. Overwrite the judgment columns per the rules below.
 3. Emit stacks.csv and anti.csv rows for YOUR teams only.
 
@@ -93,7 +94,7 @@ BLOCK_RE = re.compile(r"```(players\.csv|stacks\.csv|anti\.csv)\s*\n(.*?)```", r
 def league_line(data_dir: str) -> str:
     lj = os.path.join(data_dir, "league.json")
     if not os.path.exists(lj):
-        return "12-team half-PPR snake (details unavailable — run `draftkit setup`)"
+        return "12-team half-PPR snake (details unavailable - run `python -m sleeper_agent setup`)"
     with open(lj) as f:
         info = json.load(f)
     sc = info.get("scoring_settings") or {}
@@ -126,7 +127,7 @@ def _slug(label: str) -> str:
 def write_shards(data_dir: str, out_dir: str, by: str) -> list[str]:
     skel_path = os.path.join(data_dir, "players_skeleton.csv")
     if not os.path.exists(skel_path):
-        sys.exit("no players_skeleton.csv — run `draftkit fetch` first")
+        sys.exit("no players_skeleton.csv - run `python -m sleeper_agent fetch` first")
     skeleton = pd.read_csv(skel_path)
     rdir = os.path.join(out_dir, "research")
     os.makedirs(rdir, exist_ok=True)
@@ -181,7 +182,7 @@ def run_shard(prompt_path: str, llm_cfg: dict, model: str, timeout_s: float) -> 
     backend = llm_cfg.get("backend", "claude-cli")
     if backend == "openai-compat":
         with open(prompt_path) as f:
-            cfg = dict(llm_cfg, model=model or llm_cfg.get("model", ""))
+            cfg = dict(llm_cfg, model=model)
             return run_openai_compat(f.read(), cfg, timeout_s)
     return run_claude(prompt_path, model, timeout_s, "WebSearch,WebFetch")
 
@@ -209,7 +210,7 @@ def merge(data_dir: str, out_dir: str, replies: list[dict[str, pd.DataFrame]]) -
     for i, rep in enumerate(replies, 1):
         pl = rep.get("players.csv")
         if pl is None or "name" not in getattr(pl, "columns", []):
-            notes.append(f"shard {i}: no parsable players.csv block — its teams keep skeleton defaults")
+            notes.append(f"shard {i}: no parsable players.csv block - its teams keep skeleton defaults")
             continue
         for _, r in pl.iterrows():
             judged[str(r["name"]).strip()] = r
@@ -290,15 +291,16 @@ def cmd_research(cfg, args):
                   "name (e.g. shard_01_ARI_reply.md); then: research --from-replies")
             return
         llm = cfg.get("llm", {})
-        model = args.model or llm.get("model", "")
+        model = args.model or llm.get("research_model") or ""
+        timeout = float(args.timeout) if args.timeout is not None else float(llm.get("research_timeout_s") or 900)
         backend = llm.get("backend", "claude-cli")
         if backend == "none":
-            backend = "claude-cli"
+            sys.exit("llm.backend is 'none' - research needs an LLM; set llm.backend or use --write-only")
         print(f"running {len(prompts)} shards via {backend} (parallel {args.parallel}) ...")
 
         def one(p):
             try:
-                text = run_shard(p, dict(llm, backend=backend), model, float(args.timeout))
+                text = run_shard(p, dict(llm, backend=backend), model, timeout)
                 with open(p.replace("_prompt.md", "_reply.md"), "w") as f:
                     f.write(text)
                 print(f"  done {os.path.basename(p)}")
@@ -313,8 +315,8 @@ def cmd_research(cfg, args):
     for note in merge(cfg["data_dir"], out_dir, replies):
         print("NOTE:", note)
     print("\nmerged -> data/players.csv, stacks.csv, anti.csv; validating:")
-    res = load_research(cfg["data_dir"], None if args.offline else __import__("draftkit.sleeper", fromlist=["Sleeper"]).Sleeper(cfg["data_dir"]).players())
+    res = load_research(cfg["data_dir"], None if args.offline else __import__("sleeper_agent.sleeper", fromlist=["Sleeper"]).Sleeper(cfg["data_dir"]).players())
     for p in res.problems:
         print(p)
-    print("RESULT:", "OK" if res.ok else "ERRORS — fix before draft day")
+    print("RESULT:", "OK" if res.ok else "ERRORS - fix before draft day")
     return 0 if res.ok else 1

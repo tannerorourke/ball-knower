@@ -1,33 +1,36 @@
-# --- Config--- ---------------------------------------------------------------
+# --- Sleeper ---------------------------------------------------------------
 # from league URL: sleeper.com/leagues/<league_id>
 league_id: ""
 
-# your Sleeper username -> my_slot once the draft order is posted     
+# your Sleeper username -> my_slot once the draft order is posted
 username: ""
-my_slot: null  # override if username lookup fails
-
-# optional; defaults to the league's current draft      
+# optional; defaults to the league's current draft
 draft_id: ""
+
+my_slot: null  # override if username lookup fails
 
 # --- API --------------------------------------------------------------------
 data_dir: data
 out_dir: out
-poll_interval: 2.0
-top_n: 12 # candidates shown / sent to the draft LLM for final suggestion
+poll_interval: 2.0     # seconds between /picks polls
+top_n: 12              # candidates shown / sent to the LLM
 seed: 0                # 0 = random
 
 # --- Monte Carlo survival ---------------------------------------------------
 mc:
   sims: 2500
-  pool: 20                  # top-N available by ADP simulated as pickable (auto-raised to cover the window)
+  pool: 80                  # top-N available by ADP simulated as pickable (auto-raised to cover the window)
   sigma_base: 1.0           # ADP std dev = sigma_base + sigma_slope * adp  (pick 50 -> ~7 picks)
   sigma_slope: 0.12
   run_shift: 0.4            # std devs: each same-position pick in the last run_window picks pulls that position up
   run_window: 4
   need_shift: {STARTER: 0, FLEX: 0.5, BACKUP: 1.0, DEPTH: 1.5, URGENT: 1.0, CAPPED: 20} # std devs added to a team's board
   autodraft_latency_s: 3.0  # min(median, mean) time-on-clock below this => classified autodraft
-  autodraft_slots: []       # for n_minus calculation, assumes 0s time-on-clock
+  autodraft_slots: []       # force slots to autodraft, e.g. [3, 9]
   pos_caps: {QB: 2, TE: 2, RB: 7, WR: 7, K: 1}
+  slot_tendencies: true     # learn each human slot's style from their picks (reach noise + positional lean)
+  tendency_prior_picks: 4   # shrinkage: observed style earns full weight only past this many picks
+  lean_shift: 1.0           # sigma shift per 100% positional lean vs the room
 
 # --- Deterministic scoring --------------------------------------------------
 scoring:
@@ -49,7 +52,7 @@ scoring:
   bench_free_round: 9                                  # depth penalties halve from this round
   pos_caps: {QB: 3, TE: 2, RB: 7, WR: 7, K: 1}
 
-# --- LLM card ---------------------------------------------------------------
+# --- LLM --------------------------------------------------------------------
 llm:
   backend: claude-cli  # shared by research + draft: claude-cli | anthropic | openai-compat | none
                        # claude-cli = Claude subscription, anthropic = api billing
@@ -57,7 +60,7 @@ llm:
   draft_model: "claude-sonnet-5"    # live cards (speed matters)
   base_url: "" # openai-compat only,
                # e.g. https://openrouter.ai/api/v1, https://api.openai.com/v1, http://localhost:11434/v1 (ollama)
-  api_key_env: SLEEPER_LLM_KEY  # env var holding the key; unset = no auth header (local models)
+  api_key_env: LLM_API_KEY  # env var holding the key; unset = no auth header (local models)
   research_timeout_s: 900
   draft_timeout_s: 90
   at_n_minus: true    # if true, generate a card ahead of my pick (costs one extra call per turn)
@@ -70,7 +73,7 @@ strategy_notes: >
   or a second QB before round 11. A stack with my QB breaks ties inside a tier only. Rounds 11-14:
   ceiling, handcuffs of my RBs, one IR_STASH if available.
 
-# --- Mock draft -------------------------------------------------------------
+# --- Mock draft (python -m sleeper_agent mock) ------------------------------
 mock:
   teams: 12
   rounds: 14

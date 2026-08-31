@@ -77,7 +77,9 @@ before the next card fires.
 |---|---|---|
 | `llm.backend` | `none` (yaml: `claude-cli`) | Shared by research + draft. `claude-cli` = your Claude subscription via the CLI; `anthropic` = API billing (`ANTHROPIC_API_KEY`); `openai-compat` = any OpenAI-schema endpoint; `none` = deterministic card only; `fake` = canned card after `fake_delay_s`, for testing the queue. |
 | `llm.research_model` | `""` | Model for the pre-draft judgment pass (accuracy matters, latency doesn't). Empty = backend default. |
+| `llm.research_effort` | `high` | Thinking depth for research shards (`low`–`max`, claude-cli backend). |
 | `llm.draft_model` | `""` | Model for live cards and post-pick analysis (latency matters — you're on a clock). |
+| `llm.draft_effort` | `""` (yaml: `medium`) | Thinking depth for live cards and post-pick analysis. Empty inherits the backend default — for claude-cli, whatever the user-level session saved, which can be slow. Keep `low`–`medium`: past that, calls outlast the pick clock. |
 | `llm.base_url` | `""` | openai-compat only: the endpoint, e.g. `https://openrouter.ai/api/v1` or a local `http://localhost:11434/v1`. |
 | `llm.api_key_env` | `LLM_API_KEY` | Name of the env var holding the openai-compat key; unset = no auth header (local models). |
 | `llm.research_timeout_s` | `900` | Per-shard timeout for the research fan-out (`--timeout` flag overrides). |

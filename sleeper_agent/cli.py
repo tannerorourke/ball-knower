@@ -37,6 +37,7 @@ DEFAULTS = {
                 "bench_penalty": {"QB": 12.0, "TE": 9.0, "RB": 2.0, "WR": 2.0, "K": 15.0}, "bench_free_round": 9,
                 "pos_caps": {"QB": 3, "TE": 2, "RB": 7, "WR": 7, "K": 1}},
     "llm": {"backend": "none", "research_model": "", "draft_model": "",
+            "research_effort": "high", "draft_effort": "",
             "base_url": "", "api_key_env": "LLM_API_KEY",
             "research_timeout_s": 900, "draft_timeout_s": 90,
             "at_n_minus": False, "n_minus": 2, "eta_trigger_s": 60, "post_pick": True},

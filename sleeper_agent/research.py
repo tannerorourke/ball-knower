@@ -148,11 +148,11 @@ def write_shards(data_dir: str, out_dir: str, by: str) -> list[str]:
     return paths
 
 
-def run_claude(prompt_path: str, model: str, timeout_s: float, tools: str) -> str:
+def run_claude(prompt_path: str, model: str, timeout_s: float, tools: str, effort: str = "high") -> str:
     exe = shutil.which("claude")
     if not exe:
         raise RuntimeError("claude CLI not found on PATH")
-    args = [exe, "-p", "--output-format", "text", "--allowedTools", tools]
+    args = [exe, "-p", "--output-format", "text", "--allowedTools", tools, "--effort", effort]
     if model:
         args += ["--model", model]
     with open(prompt_path) as f:
@@ -184,7 +184,8 @@ def run_shard(prompt_path: str, llm_cfg: dict, model: str, timeout_s: float) -> 
         with open(prompt_path) as f:
             cfg = dict(llm_cfg, model=model)
             return run_openai_compat(f.read(), cfg, timeout_s)
-    return run_claude(prompt_path, model, timeout_s, "WebSearch,WebFetch")
+    return run_claude(prompt_path, model, timeout_s, "WebSearch,WebFetch",
+                      llm_cfg.get("research_effort") or "high")
 
 
 def parse_reply(text: str) -> dict[str, pd.DataFrame]:

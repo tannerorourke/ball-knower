@@ -13,8 +13,8 @@ seed: 0  # 0 = random
 
 # --- Monte Carlo survival ---------------------------------------------------
 mc:
-  sims: 2500
-  pool: 80
+  sims: 2000
+  pool: 40
   sigma_base: 1.0
   sigma_slope: 0.12
   run_shift: 0.4
@@ -45,17 +45,19 @@ scoring:
   vorp_weight: 0.15
   bench_penalty: {QB: 12.0, TE: 9.0, RB: 2.0, WR: 2.0, K: 15.0}
   bench_free_round: 9
-  pos_caps: {QB: 3, TE: 2, RB: 7, WR: 7, K: 1}
+  pos_caps: {QB: 2, TE: 2, RB: 6, WR: 6, K: 1}
 
 # --- LLM --------------------------------------------------------------------
 llm:
   backend: claude-cli  # claude-cli | anthropic | openai-compat | none
-  research_model: "claude-fable-5"
+  research_model: "claude-opus-4-8"
+  research_effort: high
   draft_model: "claude-sonnet-4-6"
+  draft_effort: medium
   base_url: ""
   api_key_env: SLEEPER_API_KEY
   research_timeout_s: 900
-  draft_timeout_s: 90
+  draft_timeout_s: 60
   at_n_minus: true
   n_minus: 2
   eta_trigger_s: 60
@@ -70,12 +72,12 @@ strategy_notes: >
 mock:
   teams: 12
   rounds: 14
-  my_slot: 10
-  pick_timer: 180
-  roster_positions: [QB, RB, RB, WR, WR, TE, FLEX, FLEX, BN, BN, BN, BN, BN, BN, IR]
+  my_slot: 1
+  pick_timer: 120
+  roster_positions: [QB, RB, RB, WR, WR, TE, FLEX, FLEX, K, BN, BN, BN, BN, BN, BN, BN]
   autodraft_teams: 3
   autodraft_slots: []
-  human_min_s: 8
+  human_min_s: 4
   human_max_s: 45
   my_pick_delay_s: 20
   speed: 10

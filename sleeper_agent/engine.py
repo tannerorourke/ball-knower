@@ -45,6 +45,10 @@ class Engine:
         self.llm_text = ""
         self.llm_status = ""
         self.llm_kind = ""
+        self.llm_pick = None   # -- the pick the on-screen card was written for
+        self.llm_started = None  # -- wall time the in-flight call began, None when idle
+        self.llm_running = None  # -- job kind currently executing (not queued), None when idle
+        self.llm_error = None    # -- job kind of the most recent failure; cleared by the next success
         self._llm_q: queue.Queue[tuple[str, int]] = queue.Queue()
         self._llm_seen: set[tuple[str, int]] = set()
         self._card_pick_done: set[int] = set()    # my picks with a precard/card job enqueued
@@ -171,12 +175,23 @@ class Engine:
             kind, pick_no = self._llm_q.get()
             try:
                 if self._stale(kind, pick_no):
-                    self.log("llm_skip", kind=kind, pick_no=pick_no)
+                    self.log("llm_skip", job=kind, pick_no=pick_no)
                     continue
                 self._run_job(kind, pick_no)
             except Exception as e:  # noqa
-                self.llm_status = f"fallback:{type(e).__name__}"
-                self.log("llm_error", kind=kind, pick_no=pick_no, err=str(e)[:200])
+                # -- log() takes the record type positionally, so the job kind rides as 'job';
+                #    passing it as 'kind' collides with that parameter. The handler is itself
+                #    guarded: a raise here ends the thread and silently kills every later card.
+                try:
+                    self.llm_status = f"fallback:{type(e).__name__}"
+                    self.llm_error = kind
+                    self.log("llm_error", job=kind, pick_no=pick_no, err=str(e)[:200])
+                except Exception:  # noqa
+                    pass
+            finally:
+                # -- clearing the running marker is what flips the panel from running to finished
+                self.llm_started = None
+                self.llm_running = None
 
     def _header(self) -> str:
         s = self.state.summary()
@@ -185,7 +200,8 @@ class Engine:
 
     def _run_job(self, kind: str, pick_no: int):
         self.llm_status = f"{kind} running"
-        t0 = time.time()
+        self.llm_started = t0 = time.time()
+        self.llm_running = kind
         if kind in ("precard", "card"):
             # packet built at dequeue time, not enqueue time - a queued job sees the current board
             packet = cardmod.build_packet(self.state.summary(), self.cands, self.my_roster(), self.tiers,
@@ -195,8 +211,9 @@ class Engine:
                 json.dump(packet, f, indent=1, default=str)
             text, status = cardmod.llm_card(packet, self.llm_cfg)
             if text:
-                self.llm_text, self.llm_kind = text, kind
+                self.llm_text, self.llm_kind, self.llm_pick = text, kind, pick_no
             self.llm_status = status
+            self.llm_error = None if status == "llm" else kind
             self.say(f"LLM card for pick {pick_no} ({status}) in {time.time()-t0:.0f}s")
             cardmod.write_card(self.out_dir, self._header(), self.det_card, text or None, status)
             self.log("llm_card", pick_no=pick_no, status=status, text=text)
@@ -204,8 +221,9 @@ class Engine:
             packet = self._postpick_packet(pick_no)
             text, status = cardmod.post_pick_card(packet, self.llm_cfg)
             if text:
-                self.llm_text, self.llm_kind = text, "post-pick"
+                self.llm_text, self.llm_kind, self.llm_pick = text, "postpick", pick_no
             self.llm_status = status
+            self.llm_error = None if status == "llm" else kind
             self.say(f"team analysis after pick {pick_no} ({status}) in {time.time()-t0:.0f}s")
             if text:
                 with open(os.path.join(self.out_dir, f"teamstate_{pick_no}.md"), "w") as f:

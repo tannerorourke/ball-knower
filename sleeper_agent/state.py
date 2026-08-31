@@ -93,6 +93,10 @@ class DraftState:
         now = now or time.time()
         picks = sorted(picks, key=lambda p: p["pick_no"])
         new = picks[len(self.picks):]
+        # -- joining (or restarting into) a draft in progress delivers all history in one
+        #    payload; those picks carry no observed timing, and stamping them with the batch
+        #    estimate brands every slot an autodrafter
+        catchup = not self.picks and len(new) > 1
         self._pending_fix = None
         for i, p in enumerate(new):
             slot = int(p.get("draft_slot") or self.order[p["pick_no"] - 1])
@@ -102,7 +106,7 @@ class DraftState:
             self.rosters.setdefault(slot, []).append(pid)
             # latency: time since the previous pick was observed. Picks batched in
             # one poll were fast, but not literally 0s - estimate half a poll.
-            if self.last_pick_seen_at is not None:
+            if self.last_pick_seen_at is not None and not catchup:
                 lat = self.batch_gap_s if i > 0 else max(0.0, now - self.last_pick_seen_at)
                 self.latency[slot].append(lat)
                 if len(new) == 1:

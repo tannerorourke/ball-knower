@@ -1,4 +1,4 @@
-"""The decision card: deterministic top-5 always; LLM-adjudicated version when available.
+"""The decision card: deterministic top-3 always; LLM-adjudicated version when available.
 Also the post-pick team-state analysis."""
 from __future__ import annotations
 
@@ -18,13 +18,11 @@ CARD_FORMAT = """A  <name>  <pos> T<tier>  vorp <n>  surv <n>%  bye <n>  stack <
    ! <only when warranted: would be 3rd+ player on that bye week, or risk >= 3 - say why>
 B  ...  (same shape; the ! line only when warranted)
 C  ...
-D  ...
-E  ...
 IF A gone -> <letter>: <one clause>
 DATA <name>: <one clause - echo the packet's data_pick verbatim; why the data likes it>
 SLEEPER <name>: <one clause - your considered pick; name the criterion or strategy note driving it>"""
 
-SYSTEM = """You are adjudicating a fantasy football draft pick. You receive a packet of precomputed numbers for a closed set of candidates. You do not compute, estimate, or recall anything about players beyond the packet - every number you print must be copied from it. You present five acceptable candidates as PEERS, not a ranking: each passes a different criterion (a tier cliff, low survival, an open slot, a backup need, a stack, raw value). Explain each in one + line and one - line, plus a ! warning line only where warranted. You close with two picks: DATA (echo the packet's data_pick - the harness's answer) and SLEEPER (your own considered call, which may equal DATA; if it deviates, cite the criterion or strategy note that drives it). Your output is displayed to a human who has under three minutes to click. Be terse. No preamble, no closing remarks, no markdown headers."""
+SYSTEM = """You are adjudicating a fantasy football draft pick. You receive a packet of precomputed numbers for a closed set of candidates. You do not compute, estimate, or recall anything about players beyond the packet - every number you print must be copied from it. You present three acceptable candidates as PEERS, not a ranking: each passes a different criterion (a tier cliff, low survival, an open slot, a backup need, a stack, raw value). Explain each in one + line and one - line, plus a ! warning line only where warranted. You close with two picks: DATA (echo the packet's data_pick - the harness's answer) and SLEEPER (your own considered call, which may equal DATA; if it deviates, cite the criterion or strategy note that drives it). Your output is displayed to a human who has under three minutes to click. Be terse. No preamble, no closing remarks, no markdown headers."""
 
 POSTPICK_SYSTEM = """You are reviewing a fantasy football roster mid-draft, immediately after the drafter made a pick. You receive the roster, its open starter and backup slots, the bye-week distribution, the remaining pick numbers, tiers remaining, and the drafter's strategy notes. You do not recall anything about players beyond the packet. Output at most 8 short lines: line 1 'ON PLAN' or 'OFF PLAN: <one clause>' vs the strategy notes; then the top 1-2 roster holes to target next (with the pick numbers to do it); then any bye pile-up forming (3+ players one week); then one line on the just-made pick. Be terse. No preamble, no markdown."""
 
@@ -71,7 +69,7 @@ def deterministic_card(cands: pd.DataFrame, tiers: pd.DataFrame, picks_until_nex
     if cands.empty:
         return "(no candidates)"
     lines = []
-    top = cands.head(5).reset_index(drop=True)
+    top = cands.head(3).reset_index(drop=True)
     for i, r in top.iterrows():
         letter = "ABCDE"[i]
         lines.append(_fmt_line(letter, r))
@@ -156,7 +154,7 @@ def _validate(text: str, packet: dict) -> tuple[bool, str]:
     data_line = sleeper_line = None
     for line in text.splitlines():
         s = line.strip()
-        if len(s) > 2 and s[0] in "ABCDE" and s[1] == " ":
+        if len(s) > 2 and s[0] in "ABC" and s[1] == " ":
             body = norm_name(s[1:])
             if any(n and n in body for n in names):
                 found += 1
@@ -175,21 +173,24 @@ def _validate(text: str, packet: dict) -> tuple[bool, str]:
     return True, ""
 
 
-def _resolve(cfg: dict) -> tuple[str, str, float]:
-    """(backend, model, timeout) for the draft phase."""
+def _resolve(cfg: dict) -> tuple[str, str, float, str]:
+    """(backend, model, timeout, effort) for the draft phase. Effort has no default:
+    empty means the backend's own (for claude-cli, the user-level session setting)."""
     backend = (cfg or {}).get("backend", "none")
-    return backend, cfg.get("draft_model") or "", float(cfg.get("draft_timeout_s") or 90)
+    return (backend, cfg.get("draft_model") or "", float(cfg.get("draft_timeout_s") or 90),
+            cfg.get("draft_effort") or "")
 
 
 def _call_backend(system: str, prompt: str, cfg: dict) -> tuple[str, str]:
     """Returns (text, error). error empty on success."""
-    backend, model, timeout = _resolve(cfg)
+    backend, model, timeout, effort = _resolve(cfg)
     try:
         if backend == "anthropic":
             import anthropic  # noqa
             client = anthropic.Anthropic()
+            kw = {"output_config": {"effort": effort}} if effort else {}
             msg = client.messages.create(model=model, max_tokens=1200, system=system,
-                                         messages=[{"role": "user", "content": prompt}])
+                                         messages=[{"role": "user", "content": prompt}], **kw)
             return "".join(b.text for b in msg.content if getattr(b, "type", "") == "text").strip(), ""
         if backend == "openai-compat":
             from .research import run_openai_compat
@@ -198,7 +199,9 @@ def _call_backend(system: str, prompt: str, cfg: dict) -> tuple[str, str]:
             exe = shutil.which("claude")
             if not exe:
                 return "", "claude CLI not found on PATH"
-            args = [exe, "-p", "--output-format", "text"]
+            args = [exe, "-p", "--output-format", "text", "--tools", ""]
+            if effort:  # -- unset inherits the user-level session default, which may be slow
+                args += ["--effort", effort]
             if model:
                 args += ["--model", model]
             args += ["--system-prompt", system]
@@ -215,7 +218,7 @@ def _fake_card(packet: dict, cfg: dict) -> str:
     """Deterministic stand-in for queue/latency testing (backend: fake)."""
     time.sleep(float(cfg.get("fake_delay_s", 2.0)))
     lines = []
-    for letter, r in zip("ABCDE", packet["candidates_ranked_by_adj"][:5]):
+    for letter, r in zip("ABC", packet["candidates_ranked_by_adj"][:3]):
         lines.append(f"{letter}  {r['name']}  {r['pos']} T{r['tier']}  vorp {r['vorp']}  surv {r['surv']:.0f}%  "
                      f"bye {r['bye']}  stack -  need {r['need']}  via VALUE")
         lines.append("   + (fake backend)")
@@ -229,13 +232,13 @@ def _fake_card(packet: dict, cfg: dict) -> str:
 
 def llm_card(packet: dict, cfg: dict) -> tuple[str, str]:
     """Returns (card_text, status). status = 'llm' | 'fallback:<reason>'."""
-    backend, _, _ = _resolve(cfg)
+    backend = _resolve(cfg)[0]
     if backend == "none":
         return "", "fallback:llm disabled"
     prompt = (
         "PACKET (JSON):\n" + json.dumps(packet, indent=1, default=str) +
         "\n\nRules:\n"
-        "1. Pick exactly five candidates from candidates_ranked_by_adj (all of them if fewer). They are PEERS "
+        "1. Pick exactly three candidates from candidates_ranked_by_adj (all of them if fewer). They are PEERS "
         "that each pass a criterion, not a ranking - B-E are acceptable picks, not runners-up. Tag each with "
         "'via <criterion>'.\n"
         "2. Copy vorp/surv/bye/stack/need from the packet verbatim.\n"
@@ -263,7 +266,7 @@ def llm_card(packet: dict, cfg: dict) -> tuple[str, str]:
 
 def post_pick_card(packet: dict, cfg: dict) -> tuple[str, str]:
     """Team-state analysis right after my pick. Returns (text, status)."""
-    backend, _, _ = _resolve(cfg)
+    backend = _resolve(cfg)[0]
     if backend == "none":
         return "", "fallback:llm disabled"
     prompt = "PACKET (JSON):\n" + json.dumps(packet, indent=1, default=str) + \

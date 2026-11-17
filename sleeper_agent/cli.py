@@ -1,4 +1,4 @@
-"""sleeper-agent command line: setup | validate | script | run | league | lineup | injuries | waivers | usage | mock"""
+"""sleeper-agent command line: setup | validate | script | run | league | lineup | injuries | waivers | usage | manage | mock"""
 from __future__ import annotations
 
 import argparse
@@ -41,9 +41,11 @@ DEFAULTS = {
             "research_effort": "high", "draft_effort": "",
             "base_url": "", "api_key_env": "LLM_API_KEY",
             "research_timeout_s": 900, "draft_timeout_s": 90,
+            "manage_model": "", "manage_timeout_s": 180, "manage_effort": "",
             "at_n_minus": False, "n_minus": 2, "eta_trigger_s": 60, "post_pick": True},
     "inseason": {"questionable_discount": 0.85, "doubtful_discount": 0.4, "waiver_pool": 40, "horizon_weeks": 3,
                  "usage_weeks": 3, "usage_drop": 0.15},
+    "research": {"max_age_days": 7},
     "strategy_notes": "",
     "mock": {"autodraft_teams": 3, "autodraft_slots": [], "human_min_s": 8, "human_max_s": 45,
              "my_pick_delay_s": 20, "speed": 10,
@@ -168,6 +170,11 @@ def cmd_usage(cfg, args):
 
 def cmd_injuries(cfg, args):
     from .manage.injuries import cmd_injuries as run
+    return run(cfg, args)
+
+
+def cmd_manage(cfg, args):
+    from .manage.analyze import cmd_manage as run
     return run(cfg, args)
 
 
@@ -323,6 +330,11 @@ def main(argv=None):
     rs.add_argument("--write-only", action="store_true", help="just write shard prompts for manual use in any LM")
     rs.add_argument("--from-replies", action="store_true", help="merge saved shard replies (shard_*_reply.md) into the final CSVs")
     rs.add_argument("--offline", action="store_true")
+    rs.add_argument("--in-season", action="store_true",
+                    help="mid-season refresh: a 7-day news sweep per team of my roster and the waiver candidates")
+    rs.add_argument("--week", type=int, help="with --in-season: NFL week (default: the current week)")
+    rs.add_argument("--teams", default="auto",
+                    help="with --in-season: auto (teams of my roster and the waiver candidates), ALL, or a comma list")
     lu = sub.add_parser("lineup", help="best lineup for a week vs. current starters")
     lu.add_argument("--week", type=int, help="NFL week (default: the current week)")
     wv = sub.add_parser("waivers", help="ranked add/drop pairs by lineup gain over the next weeks")
@@ -331,6 +343,17 @@ def main(argv=None):
     us.add_argument("--week", type=int, help="NFL week; trends cover the completed weeks before it (default: the current week)")
     us.add_argument("--candidates", help="comma-separated player ids to include")
     sub.add_parser("injuries", help="injury flags: hurt starters, free IR slots, cleared reserve players")
+    mg = sub.add_parser("manage", help="weekly report: moves, lineup, injuries and trending players passed on; "
+                                       "recommends only, never writes to Sleeper")
+    mg.add_argument("--week", type=int, help="NFL week (default: the current week)")
+    mg.add_argument("--as-of-week", type=int, metavar="N",
+                    help="replay week N from the league as it stood after week N-1; writes out/manage/w<N>-replay")
+    mg.add_argument("--no-llm", action="store_true", help="skip the model pass; the report is the engine's alone")
+    mg.add_argument("--watch", action="append", metavar="NAME",
+                    help="a player to include; a free agent joins the adds whatever its gain (repeatable)")
+    mg.add_argument("--note", action="append", metavar="TEXT",
+                    help="free text the model reads with the packet, such as a plan for a bye week (repeatable)")
+    mg.add_argument("--model", default="", help="override llm.manage_model for this run")
     sub.add_parser("league", help="in-season snapshot: current week, rosters, my FAAB")
     v = sub.add_parser("validate", help="validate research CSVs and resolve Sleeper ids")
     v.add_argument("--offline", action="store_true", help="skip Sleeper; synthetic ids")
@@ -352,7 +375,7 @@ def main(argv=None):
     cfg = load_config(args.config)
     cmds = {"setup": cmd_setup, "fetch": cmd_fetch, "research": cmd_research, "validate": cmd_validate, "script": cmd_script,
             "run": cmd_run, "league": cmd_league, "lineup": cmd_lineup, "injuries": cmd_injuries,
-            "waivers": cmd_waivers, "usage": cmd_usage, "mock": cmd_mock}
+            "waivers": cmd_waivers, "usage": cmd_usage, "manage": cmd_manage, "mock": cmd_mock}
     return cmds[args.cmd](cfg, args)
 
 

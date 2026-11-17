@@ -1,7 +1,8 @@
 """Best starting lineup for a week, and the swaps from the current one.
 
 Fixed slots take the top projected players at their position, then flex slots fill from most to
-least restrictive. Reserve and taxi players are out of play.
+least restrictive. Reserve and taxi players, counted after the recommended reserve moves, are out
+of play.
 
     python3 -m sleeper_agent lineup [--week N]
 """
@@ -12,6 +13,7 @@ from dataclasses import dataclass
 
 from ..league import LeagueSnapshot, open_league
 from ..scoring import Slots
+from .injuries import after_reserve_moves, describe_move
 from .projections import WeekProjection, project_week
 
 
@@ -97,13 +99,30 @@ def format_report(week: int, best, current, swaps: list[Swap]) -> str:
     return "\n".join(lines)
 
 
-def cmd_lineup(cfg, args):
-    api, snap = open_league(cfg)
-    week = args.week or snap.week
+@dataclass
+class WeekLineup:
+    best: list[WeekProjection]
+    current: list[WeekProjection]
+    swaps: list[Swap]
+    proj: dict[str, WeekProjection]
+    moves: list[str]
+
+
+def lineup_for_week(api, snap: LeagueSnapshot, cfg: dict, week: int) -> WeekLineup:
     byes = api.byes(snap.season)
     bye_teams = {t for t, w in byes.items() if w == week}
     extra = {"DEF"} & set(snap.roster_positions)
-    proj = project_week(api.week_projections(snap.season, week, extra), with_defenses(api.players(), snap),
-                        snap.scoring_settings, bye_teams, cfg.get("inseason"))
-    best, current, swaps = recommend(snap, proj)
-    print(format_report(week, best, current, swaps))
+    players = with_defenses(api.players(), snap)
+    moved, moves = after_reserve_moves(snap, players)
+    proj = project_week(api.week_projections(snap.season, week, extra), players, snap.scoring_settings,
+                        bye_teams, cfg.get("inseason"), week == snap.week)
+    return WeekLineup(*recommend(moved, proj), proj, [describe_move(f, players) for f in moves])
+
+
+def cmd_lineup(cfg, args):
+    api, snap = open_league(cfg)
+    week = args.week or snap.week
+    r = lineup_for_week(api, snap, cfg, week)
+    print(format_report(week, r.best, r.current, r.swaps))
+    if r.moves:
+        print("Assumes the reserve moves: " + "; ".join(r.moves))

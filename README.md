@@ -31,6 +31,29 @@ At draft time, the system uses a deterministic scoring algorithm based on VORP a
 
 When you're on the clock the header turns red. The harness's card is already there, the model output card lands 20–40 s later. Once you pick in Sleeper, the next tick sees your pick and moves on.
 
+## In-season
+
+The tool recommends moves and never writes to Sleeper. You make every add, drop, reserve move and lineup change in Sleeper yourself.
+
+Each week:
+
+1. `python -m sleeper_agent research --in-season` runs a 7-day news sweep, one agent per NFL team of your roster and the waiver candidates, and writes a refresh set under `data/research/`. The report warns when the latest set is older than `research.max_age_days`.
+2. `python -m sleeper_agent manage` builds the week's packet (lineup, injuries, waiver adds scored over the horizon, usage trends, the research set and its news) and writes `out/manage/w<N>/report.md` and `packet.json`.
+3. Read the report, then make the moves you agree with in Sleeper.
+
+The report has four sections: Moves, Lineup, Injuries, Passing on. The engine writes them from the packet alone. Unless `llm.backend` is `none`, one model call then reads the packet and rewrites the four sections, reasoning across them (a free reserve slot, a bye hole, your notes). Each Moves item opens with one bold action: `**Add X, drop Y**`, `**Add X**`, `**Move X to IR**`, `**Activate X**` or `**Hold**`.
+
+The reply is checked before it is used. It needs the four headings in order, every action has to parse, an added player has to be among the packet's adds, a dropped, reserved or activated player has to be on your roster, and no quarterback, back, receiver, tight end or kicker may be named in full unless the packet's `closed_set`, a news note or one of your notes names him. A player named only in a note may be discussed, never added, and a reply may name an opposing team in full. A reply that passes heads the report, with the engine's sections after it under `## Engine numbers`. A reply that fails, or a model error, leaves the engine's report in place with the reason in its header, and the rejected text goes to `out/manage/w<N>/rejected.md`.
+
+| flag | what |
+|---|---|
+| `--week N` | report week (default: the current NFL week) |
+| `--as-of-week N` | replay week N from the league as it stood after week N-1, written to `out/manage/w<N>-replay/`; past injury statuses, lineups and reserve lists cannot be recovered; every player counts as healthy and only the best lineup is shown |
+| `--note TEXT` | free text the model reads with the packet, such as "stream a TE over the week 9 bye" (repeatable) |
+| `--watch NAME` | include a player; a free agent joins the adds whatever its gain (repeatable) |
+| `--no-llm` | skip the model call; the report is the engine's alone |
+| `--model M` | override `llm.manage_model` for this run |
+
 ## Requirements and Configuration
 
 Requires Python 3.10+.

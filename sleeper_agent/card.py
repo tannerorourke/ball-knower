@@ -4,13 +4,12 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
-import subprocess
 import time
 
 import pandas as pd
 
 from .data import norm_name
+from .llm import chat, resolve
 
 CARD_FORMAT = """A  <name>  <pos> T<tier>  vorp <n>  surv <n>%  bye <n>  stack <+n|->  need <tag>  via <CLIFF|SURV|NEED|BACKUP|STACK|VALUE|SLEEPER>
    + <one line, the strongest reason>
@@ -173,47 +172,6 @@ def _validate(text: str, packet: dict) -> tuple[bool, str]:
     return True, ""
 
 
-def _resolve(cfg: dict) -> tuple[str, str, float, str]:
-    """(backend, model, timeout, effort) for the draft phase. Effort has no default:
-    empty means the backend's own (for claude-cli, the user-level session setting)."""
-    backend = (cfg or {}).get("backend", "none")
-    return (backend, cfg.get("draft_model") or "", float(cfg.get("draft_timeout_s") or 90),
-            cfg.get("draft_effort") or "")
-
-
-def _call_backend(system: str, prompt: str, cfg: dict) -> tuple[str, str]:
-    """Returns (text, error). error empty on success."""
-    backend, model, timeout, effort = _resolve(cfg)
-    try:
-        if backend == "anthropic":
-            import anthropic  # noqa
-            client = anthropic.Anthropic()
-            kw = {"output_config": {"effort": effort}} if effort else {}
-            msg = client.messages.create(model=model, max_tokens=1200, system=system,
-                                         messages=[{"role": "user", "content": prompt}], **kw)
-            return "".join(b.text for b in msg.content if getattr(b, "type", "") == "text").strip(), ""
-        if backend == "openai-compat":
-            from .research import run_openai_compat
-            return run_openai_compat(system + "\n\n" + prompt, dict(cfg, model=model), timeout).strip(), ""
-        if backend == "claude-cli":
-            exe = shutil.which("claude")
-            if not exe:
-                return "", "claude CLI not found on PATH"
-            args = [exe, "-p", "--output-format", "text", "--tools", ""]
-            if effort:  # -- unset inherits the user-level session default, which may be slow
-                args += ["--effort", effort]
-            if model:
-                args += ["--model", model]
-            args += ["--system-prompt", system]
-            res = subprocess.run(args, input=prompt, capture_output=True, text=True, timeout=timeout)
-            if res.returncode != 0:
-                return "", f"claude CLI exit {res.returncode}: {res.stderr[:120]}"
-            return res.stdout.strip(), ""
-        return "", "llm disabled"
-    except Exception as e:  # noqa
-        return "", f"{type(e).__name__}: {str(e)[:120]}"
-
-
 def _fake_card(packet: dict, cfg: dict) -> str:
     """Deterministic stand-in for queue/latency testing (backend: fake)."""
     time.sleep(float(cfg.get("fake_delay_s", 2.0)))
@@ -232,7 +190,7 @@ def _fake_card(packet: dict, cfg: dict) -> str:
 
 def llm_card(packet: dict, cfg: dict) -> tuple[str, str]:
     """Returns (card_text, status). status = 'llm' | 'fallback:<reason>'."""
-    backend = _resolve(cfg)[0]
+    backend = resolve(cfg, "draft")[0]
     if backend == "none":
         return "", "fallback:llm disabled"
     prompt = (
@@ -255,7 +213,7 @@ def llm_card(packet: dict, cfg: dict) -> tuple[str, str]:
     if backend == "fake":
         text = _fake_card(packet, cfg)
     else:
-        text, err = _call_backend(SYSTEM, prompt, cfg)
+        text, err = chat(SYSTEM, [{"role": "user", "content": prompt}], cfg)
         if err:
             return "", f"fallback:{err}"
     ok, why = _validate(text, packet)
@@ -266,7 +224,7 @@ def llm_card(packet: dict, cfg: dict) -> tuple[str, str]:
 
 def post_pick_card(packet: dict, cfg: dict) -> tuple[str, str]:
     """Team-state analysis right after my pick. Returns (text, status)."""
-    backend = _resolve(cfg)[0]
+    backend = resolve(cfg, "draft")[0]
     if backend == "none":
         return "", "fallback:llm disabled"
     prompt = "PACKET (JSON):\n" + json.dumps(packet, indent=1, default=str) + \
@@ -274,7 +232,7 @@ def post_pick_card(packet: dict, cfg: dict) -> tuple[str, str]:
     if backend == "fake":
         time.sleep(float(cfg.get("fake_delay_s", 2.0)))
         return "ON PLAN (fake backend)", "llm"
-    text, err = _call_backend(POSTPICK_SYSTEM, prompt, cfg)
+    text, err = chat(POSTPICK_SYSTEM, [{"role": "user", "content": prompt}], cfg)
     if err:
         return "", f"fallback:{err}"
     return text, "llm"

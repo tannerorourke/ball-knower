@@ -69,16 +69,43 @@ Produces `adj = wait_w[tag]·max(wait_cost,0) + vorp_weight·vorp_eff + need + s
 
 ## In-season management (`inseason.*`)
 
-Weekly projections are Sleeper's per-week stat lines scored with the league's scoring settings. A player whose team is on bye that week, or who is tagged Out (also IR, PUP, suspended, COVID list), scores 0. The first two keys below scale the projection for players still expected to be limited; the next two size the waiver search; the last two size the `usage` trend window and its drop flag.
+Weekly projections are Sleeper's per-week stat lines scored with the league's scoring settings. A player whose team is on bye that week scores 0. A game-status tag (Questionable, Doubtful, Out) describes one game, so it adjusts only the current NFL week: Out scores 0 there, and in every other week the raw projection stands. IR, PUP, suspended, COVID list, NA and DNR score 0 in every week. A player's `ros` is his projection summed from the report week through week 17 under the same rules.
+
+`lineup`, `waivers` and `manage` take my roster as it stands after the reserve moves `injuries` recommends: a bench player eligible for a free reserve slot counts on reserve, and a reserve player with no tag counts back in play. The reports say so when a move applies. Among drops tied on gain, the recommended one has the lowest `ros`, and `drop_order` in the manage packet lists the players outside the report week's best lineup (reserve and taxi aside) by `ros`, lowest first. The best lineup decides, since the starters set in Sleeper may be last week's. The waiver candidates are the projection pool below plus every trending free agent the player table holds at a position the league starts, so a trending pickup ranks by gain beside the rest.
+
+The first two keys below scale the projection for players still expected to be limited; the next two size the waiver search; the last two size the `usage` trend window and its drop flag.
 
 | key | default | role |
 |---|---|---|
-| `inseason.questionable_discount` | `0.85` | Multiplier on the projection of a player tagged Questionable. |
-| `inseason.doubtful_discount` | `0.4` | Multiplier on the projection of a player tagged Doubtful. |
-| `inseason.waiver_pool` | `40` | `waivers` scores the top this-many free agents (players on no roster) by projection over the horizon. |
+| `inseason.questionable_discount` | `0.85` | Multiplier on the current-week projection of a player tagged Questionable. |
+| `inseason.doubtful_discount` | `0.4` | Multiplier on the current-week projection of a player tagged Doubtful. |
+| `inseason.waiver_pool` | `40` | `waivers` scores the top this-many free agents (players on no roster) by projection over the horizon, plus the trending free agents at started positions. |
 | `inseason.horizon_weeks` | `3` | `waivers` sums the optimal-lineup gain of each add/drop pair over this many weeks starting at `--week`; a pickup that covers a bye week scores for it. |
 | `inseason.usage_weeks` | `3` | `usage` looks at this many of the most recent completed weeks before `--week`; weeks with no stat rows are skipped. |
 | `inseason.usage_drop` | `0.15` | `usage` flags a rostered player whose snap, target or carry share fell by this much or more from the first week in the window to the last. |
+
+## Weekly report (`python -m sleeper_agent manage`)
+
+`manage` writes `out/manage/w<N>/report.md` and `packet.json`. Unless `--no-llm` is passed or `llm.backend` is `none`, it makes one model call in the `manage` phase (`llm.manage_model`, `llm.manage_timeout_s`, `llm.manage_effort`) and keeps the reply only if it passes validation; otherwise the engine's report stands with the reason in its header, and a rejected reply goes to `rejected.md`. On the `anthropic` backend a `manage` call may return up to 4000 tokens and a `draft` call 1200. It recommends and never writes to Sleeper.
+
+| flag | role |
+|---|---|
+| `--week N` | Report week. Default: the current NFL week. |
+| `--as-of-week N` | Replay week N: rosters and FAAB are rebuilt to 12:00 UTC the day after week N-1's last game by undoing later transactions, and the report goes to `out/manage/w<N>-replay/`. Past injury statuses, lineups and reserve lists cannot be recovered; every player counts as healthy, and no research set or trending count is read. |
+| `--note TEXT` | Free text added to `notes` in the packet, which the model reads. Repeatable. |
+| `--watch NAME` | A player to include; a free agent joins the adds whatever its gain. Repeatable. |
+| `--no-llm` | Skip the model call. |
+| `--model M` | Override `llm.manage_model` for this run. |
+
+## In-season research (`research.*`)
+
+`research --in-season` writes one refresh set per week under `data/research/<season>-w<N>/` and names the latest in `data/research/current.json`. The prompts and replies live in `out/research/<season>-w<N>/`. It uses the `llm.*` backend, and `inseason.waiver_pool` and `inseason.horizon_weeks` to pick candidates.
+
+`--teams` picks the shards, one per NFL team that has rows. `auto` (default) takes as candidates the adds of the 8 best add groups by gain (the `waivers` ranking) plus the 5 most-added trending free agents at started positions, and shards the teams of those candidates and of my players. `ALL` or a comma list such as `ARI,BUF` takes the whole `inseason.waiver_pool` plus every trending free agent at a started position as candidates; a list then keeps only its teams, and a listed team with no rows is skipped with a note. A reply row for a player outside its shard's slice is dropped. Rows of the previous set stay, with their original `as_of`, for a player the new replies hold no row for in that table (`players.csv` and `news.csv` separately).
+
+| key | default | role |
+|---|---|---|
+| `research.max_age_days` | `7` | `load_current` returns a warning when the latest refresh set is older than this many days, or when none exists. |
 
 ## Model card and Backend (`llm.*`)
 
@@ -97,6 +124,9 @@ before the next card fires.
 | `llm.api_key_env` | `LLM_API_KEY` | Name of the env var holding the openai-compat key; unset = no auth header (local models). |
 | `llm.research_timeout_s` | `900` | Per-shard timeout for the research fan-out (`--timeout` flag overrides). |
 | `llm.draft_timeout_s` | `90` | Timeout for a live card call — past this the deterministic card stands alone. |
+| `llm.manage_model` | `""` | Model for the `manage` report call (`--model` overrides). Empty = backend default. |
+| `llm.manage_timeout_s` | `180` | Timeout for the `manage` report call; past it the engine's report stands. |
+| `llm.manage_effort` | `""` | Thinking depth for the `manage` report call. Empty inherits the backend default. |
 | `llm.at_n_minus` | `false` (yaml: `true`) | Pre-generate the card before you're on the clock (one extra call per turn) so it's ready when the clock starts. |
 | `llm.n_minus` | `2` | Count rule: fire the early card when ≤ this many picks remain before yours. |
 | `llm.eta_trigger_s` | `60` | Time rule (from round 4): also fire when the expected wait to your pick — sum of `min(median, mean)` pick time over the slots ahead — drops to this. A wall of autodrafters ahead fires the card *more* picks out than `n_minus`. |

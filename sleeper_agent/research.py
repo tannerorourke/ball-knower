@@ -265,6 +265,10 @@ def merge(data_dir: str, out_dir: str, replies: list[dict[str, pd.DataFrame]]) -
 
 
 def cmd_research(cfg, args):
+    if args.in_season:
+        # -- imported here: manage.refresh imports this module
+        from .manage.refresh import cmd_refresh
+        return cmd_refresh(cfg, args)
     out_dir = cfg["out_dir"]
     rdir = os.path.join(out_dir, "research")
     if args.from_replies:

@@ -60,8 +60,8 @@ def week_shares(rows: list) -> dict[str, dict[str, float | None]]:
     return out
 
 
+# -- shares for the 'count' most recent weeks before 'week' that have stat rows; empty weeks are skipped
 def completed_weeks(fetch, week: int, count: int) -> dict[int, dict]:
-    """Shares for the `count` most recent weeks before `week` that have stat rows; empty weeks are skipped."""
     found: dict[int, dict] = {}
     for w in range(week - 1, 0, -1):
         if len(found) >= count:
@@ -72,8 +72,8 @@ def completed_weeks(fetch, week: int, count: int) -> dict[int, dict]:
     return dict(sorted(found.items()))
 
 
+# -- rival id -> the rostered player id it shares a team and position with
 def same_team_rivals(players: dict, rostered: list[str]) -> dict[str, str]:
-    """Rival id -> the rostered player id it shares a team and position with."""
     mine = {pid: players[pid] for pid in rostered if pid in players}
     out: dict[str, str] = {}
     for pid in sorted(players):
@@ -145,16 +145,21 @@ def write_csv(path: str, weeks: list[int], rows: list[Usage]) -> None:
                             *("" if s[m] is None else s[m] for m in METRICS), flags])
 
 
-def cmd_usage(cfg, args):
-    api, snap = open_league(cfg)
+def usage_for_week(api, snap, cfg: dict, week: int, candidates: list[str] = ()) -> tuple[list[int], list[Usage]]:
+    """-> (the completed weeks the shares cover, the usage rows)."""
     inseason = cfg.get("inseason") or {}
-    week = args.week or snap.week
     count = max(1, int(inseason.get("usage_weeks", DEFAULT_WEEKS)))
     drop = float(inseason.get("usage_drop", DEFAULT_DROP))
-    candidates = [c for c in (getattr(args, "candidates", None) or "").split(",") if c]
     weekly = completed_weeks(lambda w: api.week_stats(snap.season, w), week, count)
-    rows = usage_table(weekly, api.players(), list(snap.mine.players), candidates, drop)
-    print(format_report(week, list(weekly), rows))
+    return list(weekly), usage_table(weekly, api.players(), list(snap.mine.players), list(candidates), drop)
+
+
+def cmd_usage(cfg, args):
+    api, snap = open_league(cfg)
+    week = args.week or snap.week
+    candidates = [c for c in (getattr(args, "candidates", None) or "").split(",") if c]
+    weeks, rows = usage_for_week(api, snap, cfg, week, candidates)
+    print(format_report(week, weeks, rows))
     path = os.path.join(cfg["out_dir"], "manage", f"w{week}", "usage.csv")
-    write_csv(path, list(weekly), rows)
+    write_csv(path, weeks, rows)
     print(f"wrote {path}")

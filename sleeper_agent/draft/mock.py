@@ -6,7 +6,7 @@ import time
 import numpy as np
 
 from .montecarlo import sample_one_pick
-from .scoring import Slots
+from ..core.scoring import Slots
 from .state import DraftMeta, pick_order, round_and_pick
 
 

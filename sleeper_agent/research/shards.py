@@ -30,7 +30,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pandas as pd
 
-from .data import PLAYER_COLS, load_research, norm_name
+from ..core.data import PLAYER_COLS, load_research, norm_name
 
 DIVISIONS = {
     "AFC East": ["BUF", "MIA", "NE", "NYJ"], "AFC North": ["BAL", "CIN", "CLE", "PIT"],
@@ -267,7 +267,7 @@ def merge(data_dir: str, out_dir: str, replies: list[dict[str, pd.DataFrame]]) -
 def cmd_research(cfg, args):
     if args.in_season:
         # -- imported here: manage.refresh imports this module
-        from .manage.refresh import cmd_refresh
+        from ..manage.refresh import cmd_refresh
         return cmd_refresh(cfg, args)
     out_dir = cfg["out_dir"]
     rdir = os.path.join(out_dir, "research")
@@ -320,7 +320,7 @@ def cmd_research(cfg, args):
     for note in merge(cfg["data_dir"], out_dir, replies):
         print("NOTE:", note)
     print("\nmerged -> data/players.csv, stacks.csv, anti.csv; validating:")
-    res = load_research(cfg["data_dir"], None if args.offline else __import__("sleeper_agent.sleeper", fromlist=["Sleeper"]).Sleeper(cfg["data_dir"]).players())
+    res = load_research(cfg["data_dir"], None if args.offline else __import__("sleeper_agent.core.sleeper", fromlist=["Sleeper"]).Sleeper(cfg["data_dir"]).players())
     for p in res.problems:
         print(p)
     print("RESULT:", "OK" if res.ok else "ERRORS - fix before draft day")

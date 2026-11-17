@@ -11,9 +11,9 @@ import os
 import re
 import unicodedata
 
-from ..data import norm_name
-from ..league import open_league
-from ..llm import chat, resolve
+from ..core.data import norm_name
+from ..core.league import open_league
+from ..core.llm import chat, resolve
 from .packet import build_packet
 from .replay import open_replay
 

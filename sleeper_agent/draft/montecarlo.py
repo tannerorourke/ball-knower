@@ -14,8 +14,8 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from .data import POS
-from .scoring import Slots, roster_fill
+from ..core.data import POS
+from ..core.scoring import Slots, roster_fill
 
 POS_IDX = {p: i for i, p in enumerate(POS)}
 

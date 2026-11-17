@@ -23,9 +23,9 @@ from dataclasses import dataclass
 
 import pandas as pd
 
-from ..data import norm_name
-from ..league import open_league
-from ..research import _slug, run_shard
+from ..core.data import norm_name
+from ..core.league import open_league
+from ..research.shards import _slug, run_shard
 from .usage import same_team_rivals
 from .waivers import (DEFAULT_HORIZON, DEFAULT_POOL, auto_candidates, candidate_ids, free_agent_table, market_inputs,
                       trending_free_agents, weekly_projections)

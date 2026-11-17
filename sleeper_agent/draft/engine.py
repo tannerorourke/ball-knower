@@ -11,9 +11,9 @@ import numpy as np
 import pandas as pd
 
 from . import card as cardmod
-from .data import POS, Research, tier_table
+from ..core.data import POS, Research, tier_table
 from .montecarlo import simulate, slot_tendencies
-from .scoring import Slots, candidate_table, roster_fill, roster_needs, replacement_levels, value_column
+from ..core.scoring import Slots, candidate_table, roster_fill, roster_needs, replacement_levels, value_column
 from .state import DraftMeta, DraftState, round_and_pick
 
 

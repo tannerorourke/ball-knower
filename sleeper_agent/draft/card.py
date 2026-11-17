@@ -8,8 +8,8 @@ import time
 
 import pandas as pd
 
-from .data import norm_name
-from .llm import chat, resolve
+from ..core.data import norm_name
+from ..core.llm import chat, resolve
 
 CARD_FORMAT = """A  <name>  <pos> T<tier>  vorp <n>  surv <n>%  bye <n>  stack <+n|->  need <tag>  via <CLIFF|SURV|NEED|BACKUP|STACK|VALUE|SLEEPER>
    + <one line, the strongest reason>

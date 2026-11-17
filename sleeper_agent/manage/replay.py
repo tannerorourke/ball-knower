@@ -9,7 +9,7 @@ import datetime
 import sys
 from dataclasses import replace
 
-from ..league import LeagueSnapshot, open_league
+from ..core.league import LeagueSnapshot, open_league
 
 LAST_ROUND = 18
 

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import sys
 
-from ..data import norm_name
+from ..core.data import norm_name
 from .injuries import flags_for_week
 from .lineup import lineup_for_week
 from .projections import WeekProjection

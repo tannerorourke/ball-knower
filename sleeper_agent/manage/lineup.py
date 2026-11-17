@@ -11,8 +11,8 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 
-from ..league import LeagueSnapshot, open_league
-from ..scoring import Slots
+from ..core.league import LeagueSnapshot, open_league
+from ..core.scoring import Slots
 from .injuries import after_reserve_moves, describe_move
 from .projections import WeekProjection, project_week
 

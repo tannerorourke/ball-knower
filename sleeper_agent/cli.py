@@ -10,15 +10,15 @@ import numpy as np
 import pandas as pd
 import yaml
 
-from .data import load_research, tier_table
-from .fetch import cmd_fetch, do_fetch
-from .research import cmd_research
-from .engine import Engine
-from .montecarlo import simulate
-from .scoring import Slots, replacement_levels
-from .league import LeagueSnapshot
-from .sleeper import Sleeper
-from .state import DraftMeta, DraftState, my_pick_numbers, round_and_pick
+from .core.data import load_research, tier_table
+from .research.fetch import cmd_fetch, do_fetch
+from .research.shards import cmd_research
+from .draft.engine import Engine
+from .draft.montecarlo import simulate
+from .core.scoring import Slots, replacement_levels
+from .core.league import LeagueSnapshot
+from .core.sleeper import Sleeper
+from .draft.state import DraftMeta, DraftState, my_pick_numbers, round_and_pick
 
 DEFAULTS = {
     "league_id": "", "draft_id": "", "username": "", "my_slot": None,
@@ -255,7 +255,7 @@ def cmd_script(cfg, args):
 def _run(cfg, client, meta, res, interval, headless=False, on_my_clock=None, max_ticks=None):
     dash = None
     if not headless:
-        from .dashboard import Dashboard
+        from .draft.dashboard import Dashboard
         dash = Dashboard()
     eng = Engine(client, meta, res, cfg, dashboard=dash, on_my_clock=on_my_clock)
     eng.say(f"slot {meta.my_slot}, picks {eng.state.my_picks}")
@@ -284,7 +284,7 @@ def cmd_run(cfg, args):
 
 
 def cmd_mock(cfg, args):
-    from .mock import MockSleeper
+    from .draft.mock import MockSleeper
     api = None if args.offline else Sleeper(cfg["data_dir"])
     sp = api.players() if api else None
     res = load_research(cfg["data_dir"], sp)

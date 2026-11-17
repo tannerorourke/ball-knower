@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
-from ..league import LeagueSnapshot, TeamRoster, open_league
+from ..core.league import LeagueSnapshot, TeamRoster, open_league
 
 STARTER_STATUSES = {"Questionable", "Doubtful", "Out", "IR"}
 RESERVE_MOVES = ("ir_open", "ir_cleared")

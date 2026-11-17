@@ -18,9 +18,9 @@ import os
 import numpy as np
 import pandas as pd
 
-from .data import PLAYER_COLS, POS
-from .scoring import score_stats
-from .sleeper import Sleeper
+from ..core.data import PLAYER_COLS, POS
+from ..core.scoring import score_stats
+from ..core.sleeper import Sleeper
 
 COUNTS = {"QB": 24, "RB": 70, "WR": 80, "TE": 24, "K": 20}
 DEFAULT_SCORING = {"pass_td": 4, "pass_yd": 0.04, "pass_int": -1, "pass_2pt": 2,

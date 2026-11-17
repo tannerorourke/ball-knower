@@ -11,7 +11,7 @@ import csv
 import os
 from dataclasses import dataclass, field
 
-from ..league import open_league
+from ..core.league import open_league
 
 DEFAULT_WEEKS = 3
 DEFAULT_DROP = 0.15

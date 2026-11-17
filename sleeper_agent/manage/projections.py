@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ..scoring import score_stats
+from ..core.scoring import score_stats
 
 OUT_STATUSES = {"Out", "IR", "PUP", "Sus", "COV", "NA", "DNR"}
 GAME_STATUSES = {"Questionable", "Doubtful", "Out"}

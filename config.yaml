@@ -59,10 +59,11 @@ inseason:
 # --- LLM --------------------------------------------------------------------
 llm:
   backend: claude-cli  # claude-cli | anthropic | openai-compat | none
-  research_model: "claude-opus-4-8"
+  research_model: "claude-opus-5-5"
   research_effort: high
-  draft_model: "claude-sonnet-4-6"
+  draft_model: "claude-sonnet-5-5"
   draft_effort: medium
+  manage_model: "claude-opus-5-5"
   base_url: ""
   api_key_env: SLEEPER_API_KEY
   research_timeout_s: 900

@@ -67,6 +67,19 @@ Produces `adj = wait_w[tag]·max(wait_cost,0) + vorp_weight·vorp_eff + need + s
 | `scoring.stack_max_bonus` | `6.0` | Points at `stack_score` 100 for correlating with your QB/receivers (scales linearly with the researched score). |
 | `scoring.bye_cost_per_collision` | *(removed)* | Bye cost no longer enters `adj`; kept only for the display column. |
 
+## In-season management (`inseason.*`)
+
+Weekly projections are Sleeper's per-week stat lines scored with the league's scoring settings. A player whose team is on bye that week, or who is tagged Out (also IR, PUP, suspended, COVID list), scores 0. The first two keys below scale the projection for players still expected to be limited; the next two size the waiver search; the last two size the `usage` trend window and its drop flag.
+
+| key | default | role |
+|---|---|---|
+| `inseason.questionable_discount` | `0.85` | Multiplier on the projection of a player tagged Questionable. |
+| `inseason.doubtful_discount` | `0.4` | Multiplier on the projection of a player tagged Doubtful. |
+| `inseason.waiver_pool` | `40` | `waivers` scores the top this-many free agents (players on no roster) by projection over the horizon. |
+| `inseason.horizon_weeks` | `3` | `waivers` sums the optimal-lineup gain of each add/drop pair over this many weeks starting at `--week`; a pickup that covers a bye week scores for it. |
+| `inseason.usage_weeks` | `3` | `usage` looks at this many of the most recent completed weeks before `--week`; weeks with no stat rows are skipped. |
+| `inseason.usage_drop` | `0.15` | `usage` flags a rostered player whose snap, target or carry share fell by this much or more from the first week in the window to the last. |
+
 ## Model card and Backend (`llm.*`)
 
 All calls run through one FIFO worker queue: jobs are never cancelled, the panel keeps the

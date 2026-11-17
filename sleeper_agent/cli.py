@@ -1,4 +1,4 @@
-"""sleeper-agent command line: setup | validate | script | run | mock"""
+"""sleeper-agent command line: setup | validate | script | run | league | lineup | injuries | waivers | usage | mock"""
 from __future__ import annotations
 
 import argparse
@@ -16,6 +16,7 @@ from .research import cmd_research
 from .engine import Engine
 from .montecarlo import simulate
 from .scoring import Slots, replacement_levels
+from .league import LeagueSnapshot
 from .sleeper import Sleeper
 from .state import DraftMeta, DraftState, my_pick_numbers, round_and_pick
 
@@ -41,6 +42,8 @@ DEFAULTS = {
             "base_url": "", "api_key_env": "LLM_API_KEY",
             "research_timeout_s": 900, "draft_timeout_s": 90,
             "at_n_minus": False, "n_minus": 2, "eta_trigger_s": 60, "post_pick": True},
+    "inseason": {"questionable_discount": 0.85, "doubtful_discount": 0.4, "waiver_pool": 40, "horizon_weeks": 3,
+                 "usage_weeks": 3, "usage_drop": 0.15},
     "strategy_notes": "",
     "mock": {"autodraft_teams": 3, "autodraft_slots": [], "human_min_s": 8, "human_max_s": 45,
              "my_pick_delay_s": 20, "speed": 10,
@@ -130,6 +133,42 @@ def cmd_setup(cfg, args):
     print(f"wrote {cfg['data_dir']}/league.json")
     print()
     do_fetch(cfg)   # seed the numeric board in the same step
+
+
+def cmd_league(cfg, args):
+    for key in ("league_id", "username"):
+        if not cfg.get(key):
+            sys.exit(f"config key {key} is not set")
+    snap = LeagueSnapshot.from_api(Sleeper(cfg["data_dir"]), str(cfg["league_id"]), cfg["username"])
+    print(f"{snap.name}: {snap.season} {snap.season_type}, current week {snap.week}")
+    for r in sorted(snap.rosters, key=lambda r: r.roster_id):
+        mark = "*" if r.is_mine else " "
+        print(f"{mark} {r.roster_id:>2} {r.owner:<20} {r.wins}-{r.losses}-{r.ties}  players {len(r.players)}"
+              f"  FAAB ${r.faab_left:g}")
+    me = snap.mine
+    if me is None:
+        sys.exit(f"no roster in this league belongs to {cfg['username']}")
+    print(f"My FAAB balance: ${me.faab_left:g} of ${snap.faab_budget:g}")
+
+
+def cmd_lineup(cfg, args):
+    from .manage.lineup import cmd_lineup as run
+    return run(cfg, args)
+
+
+def cmd_waivers(cfg, args):
+    from .manage.waivers import cmd_waivers as run
+    return run(cfg, args)
+
+
+def cmd_usage(cfg, args):
+    from .manage.usage import cmd_usage as run
+    return run(cfg, args)
+
+
+def cmd_injuries(cfg, args):
+    from .manage.injuries import cmd_injuries as run
+    return run(cfg, args)
 
 
 def cmd_validate(cfg, args):
@@ -284,6 +323,15 @@ def main(argv=None):
     rs.add_argument("--write-only", action="store_true", help="just write shard prompts for manual use in any LM")
     rs.add_argument("--from-replies", action="store_true", help="merge saved shard replies (shard_*_reply.md) into the final CSVs")
     rs.add_argument("--offline", action="store_true")
+    lu = sub.add_parser("lineup", help="best lineup for a week vs. current starters")
+    lu.add_argument("--week", type=int, help="NFL week (default: the current week)")
+    wv = sub.add_parser("waivers", help="ranked add/drop pairs by lineup gain over the next weeks")
+    wv.add_argument("--week", type=int, help="first NFL week of the horizon (default: the current week)")
+    us = sub.add_parser("usage", help="snap, target and carry share trends for my roster and its rivals")
+    us.add_argument("--week", type=int, help="NFL week; trends cover the completed weeks before it (default: the current week)")
+    us.add_argument("--candidates", help="comma-separated player ids to include")
+    sub.add_parser("injuries", help="injury flags: hurt starters, free IR slots, cleared reserve players")
+    sub.add_parser("league", help="in-season snapshot: current week, rosters, my FAAB")
     v = sub.add_parser("validate", help="validate research CSVs and resolve Sleeper ids")
     v.add_argument("--offline", action="store_true", help="skip Sleeper; synthetic ids")
     s = sub.add_parser("script", help="pre-draft survival at each of my picks")
@@ -303,7 +351,8 @@ def main(argv=None):
     args = ap.parse_args(argv)
     cfg = load_config(args.config)
     cmds = {"setup": cmd_setup, "fetch": cmd_fetch, "research": cmd_research, "validate": cmd_validate, "script": cmd_script,
-            "run": cmd_run, "mock": cmd_mock}
+            "run": cmd_run, "league": cmd_league, "lineup": cmd_lineup, "injuries": cmd_injuries,
+            "waivers": cmd_waivers, "usage": cmd_usage, "mock": cmd_mock}
     return cmds[args.cmd](cfg, args)
 
 

@@ -47,6 +47,15 @@ scoring:
   bench_free_round: 9
   pos_caps: {QB: 2, TE: 2, RB: 6, WR: 6, K: 1}
 
+# --- In-season -------------------------------------------------------------
+inseason:
+  questionable_discount: 0.85
+  doubtful_discount: 0.4
+  waiver_pool: 40
+  horizon_weeks: 3
+  usage_weeks: 3
+  usage_drop: 0.15
+
 # --- LLM --------------------------------------------------------------------
 llm:
   backend: claude-cli  # claude-cli | anthropic | openai-compat | none

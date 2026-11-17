@@ -7,6 +7,11 @@ import pandas as pd
 
 from .data import POS
 
+def score_stats(stats: dict, scoring: dict) -> float:
+    """Fantasy points for one stat line under a league's scoring settings."""
+    return sum(float(v) * float(scoring[k]) for k, v in stats.items() if k in scoring and isinstance(v, (int, float)))
+
+
 FLEX_DEFS = {
     "FLEX": {"RB", "WR", "TE"},
     "SUPER_FLEX": {"QB", "RB", "WR", "TE"},

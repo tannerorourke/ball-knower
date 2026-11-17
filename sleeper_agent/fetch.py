@@ -19,6 +19,7 @@ import numpy as np
 import pandas as pd
 
 from .data import PLAYER_COLS, POS
+from .scoring import score_stats
 from .sleeper import Sleeper
 
 COUNTS = {"QB": 24, "RB": 70, "WR": 80, "TE": 24, "K": 20}
@@ -80,7 +81,7 @@ def build_skeleton(data_dir: str, season: int | None = None, scoring: dict | Non
         team = p.get("team") or meta.get("team")
         if pos not in POS or not team:
             continue
-        pts = sum(float(v) * float(scoring[k]) for k, v in st.items() if k in scoring and isinstance(v, (int, float)))
+        pts = score_stats(st, scoring)
         if pts <= 0:
             continue
         adp = float(st.get(adp_field) or 999.0)

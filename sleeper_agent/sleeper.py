@@ -11,6 +11,8 @@ from .data import POS
 from .scoring import FLEX_DEFS
 
 BASE = "https://api.sleeper.app/v1"
+PROJ_BASE = "https://api.sleeper.com"
+PLAYERS_CACHE_VERSION = 2  # -- bump when the slim player record gains or loses fields
 
 
 def league_positions(data_dir: str) -> set[str]:
@@ -70,11 +72,41 @@ class Sleeper:
     def picks(self, draft_id: str) -> list:
         return self._get(f"/draft/{draft_id}/picks")
 
+    def nfl_state(self) -> dict:
+        return self._get("/state/nfl")
+
+    def matchups(self, league_id: str, week: int) -> list:
+        return self._get(f"/league/{league_id}/matchups/{int(week)}")
+
+    def transactions(self, league_id: str, round_: int) -> list:
+        """Transactions for one round (Sleeper's round equals the NFL week)."""
+        return self._get(f"/league/{league_id}/transactions/{int(round_)}")
+
+    def trending(self, kind: str = "add", lookback_hours: int = 24, limit: int = 25) -> list:
+        if kind not in ("add", "drop"):
+            raise ValueError("kind must be 'add' or 'drop'")
+        return self._get(f"/players/nfl/trending/{kind}?lookback_hours={int(lookback_hours)}&limit={int(limit)}")
+
     # --- undocumented but long-stable endpoints ------------------------
     def projections(self, season: int) -> list:
         """Full-season stat projections for this league's positions, with Sleeper ADP."""
         pos_q = "".join(f"&position[]={p}" for p in sorted(self.positions))
         url = f"https://api.sleeper.com/projections/nfl/{season}?season_type=regular{pos_q}&order_by=adp_half_ppr"
+        r = self.s.get(url, timeout=30)
+        r.raise_for_status()
+        return r.json()
+
+    def week_projections(self, season: int, week: int, extra_positions=()) -> list:
+        """Per-week stat projections for this league's positions, plus any `extra_positions` (e.g. DEF)."""
+        pos_q = "".join(f"&position[]={p}" for p in sorted(self.positions | set(extra_positions)))
+        url = f"{PROJ_BASE}/projections/nfl/{int(season)}/{int(week)}?season_type=regular{pos_q}"
+        r = self.s.get(url, timeout=30)
+        r.raise_for_status()
+        return r.json()
+
+    def week_stats(self, season: int, week: int) -> list:
+        """Actual box-score stats for one week."""
+        url = f"{PROJ_BASE}/stats/nfl/{int(season)}/{int(week)}?season_type=regular"
         r = self.s.get(url, timeout=30)
         r.raise_for_status()
         return r.json()
@@ -97,7 +129,8 @@ class Sleeper:
     # --- player table (5 MB; cache for a day) --------------------------
     def players(self, max_age_hours: float = 24.0) -> dict:
         path = os.path.join(self.data_dir, "players_nfl.json")
-        if os.path.exists(path):
+        vpath = path + ".version"
+        if os.path.exists(path) and self._cache_version(vpath) == PLAYERS_CACHE_VERSION:
             age_h = (time.time() - os.path.getmtime(path)) / 3600
             if age_h < max_age_hours:
                 with open(path) as f:
@@ -120,10 +153,27 @@ class Sleeper:
                 "search_rank": p.get("search_rank"),
                 "age": p.get("age"),
                 "years_exp": p.get("years_exp"),
+                "active": p.get("active"),
+                "injury_body_part": p.get("injury_body_part"),
+                "injury_notes": p.get("injury_notes"),
+                "injury_start_date": p.get("injury_start_date"),
+                "practice_participation": p.get("practice_participation"),
+                "depth_chart_position": p.get("depth_chart_position"),
+                "depth_chart_order": p.get("depth_chart_order"),
             }
             for pid, p in data.items()
             if isinstance(p, dict) and p.get("position") in self.positions
         }
         with open(path, "w") as f:
             json.dump(slim, f)
+        with open(vpath, "w") as f:
+            f.write(str(PLAYERS_CACHE_VERSION))
         return slim
+
+    @staticmethod
+    def _cache_version(vpath: str) -> int | None:
+        try:
+            with open(vpath) as f:
+                return int(f.read().strip())
+        except (OSError, ValueError):
+            return None

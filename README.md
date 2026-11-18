@@ -14,7 +14,6 @@ At draft time, the system uses a deterministic scoring algorithm based on VORP a
 
 1. `cd ./sleeper-agent` $\rightarrow$ `pip install -r requirements.txt` $\rightarrow$ set `league_id` (`sleeper.com/leagues/<this_number>/league`) and username in `config.yaml`.
 2. `python -m sleeper_agent setup` - confirms roster/scoring parse, seeds `players_skeleton.csv`, and prints your picks + a settings block.
-3. (Optional) `python tools/make_fake_research.py data` and `python -m sleeper_agent mock --offline --speed 60` (add --no-llm to skip model card) - dry run so the screen and CLI output is familiar.
 
 **Draft day (2+ hrs out)**:
 
@@ -24,6 +23,7 @@ At draft time, the system uses a deterministic scoring algorithm based on VORP a
    - **(ok)** `python -m sleeper_agent fetch` - only generate `data/players_skeleton.csv`. Run `RESEARCH.md` in a LM of your choice with the skeleton attached. Place output under `data\`.
 2. Once the draft order posts: `python -m sleeper_agent script` - your round-by-round expected board.
 3. Edit strategy_notes in `config.yaml` for additional rules you want enforced during your draft.
+4. (Optional) `python -m sleeper_agent mock --offline --speed 60` (add --no-llm to skip model card) - dry run on the research tables so the screen and CLI output is familiar.
 
 **Draft Time**:
 
@@ -182,7 +182,6 @@ The terminal UI runs half-screen next to the Sleeper site, so the roster is squi
 | `out/packet_<pick>.json`                         | Exactly what the LLM saw for each of your picks.                                                         |
 | `out/teamstate_<pick>.md`                        | Post-pick team-state analysis after each of your picks.                                                  |
 | `out/script.csv`                                 | Pre-draft survival at each of your picks.                                                                |
-| `tools/make_fake_research.py`                    | Synthetic research for dry runs:`python tools/make_fake_research.py data` (overwrites `data/*.csv`). |
 
 ## Caviots / Known Gaps
 

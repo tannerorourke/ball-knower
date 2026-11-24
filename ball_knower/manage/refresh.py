@@ -7,7 +7,7 @@ row whose player the new replies hold no row for in that table is carried forwar
 `auto` takes the adds of the best waiver groups plus the most-added trending free agents as candidates;
 ALL and a team list take the whole pool plus every trending free agent, a list keeping only its teams.
 
-    python3 -m sleeper_agent research --in-season [--week N] [--teams auto|ALL|ARI,BUF]
+    python3 -m ball_knower research --in-season [--week N] [--teams auto|ALL|ARI,BUF]
                                       [--write-only | --from-replies] [--parallel N] [--model M] [--timeout S]
 """
 from __future__ import annotations

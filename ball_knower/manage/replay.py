@@ -1,7 +1,7 @@
 """Replay a past week: the league's rosters and FAAB rebuilt to a cutoff by undoing every later transaction,
 read through an API wrapper that hides what was not known at that cutoff.
 
-    python3 -m sleeper_agent manage --as-of-week N [--no-llm]
+    python3 -m ball_knower manage --as-of-week N [--no-llm]
 """
 from __future__ import annotations
 

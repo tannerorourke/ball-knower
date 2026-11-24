@@ -39,7 +39,7 @@ def league_positions(data_dir: str) -> set[str]:
 class Sleeper:
     def __init__(self, data_dir: str = "data", timeout: float = 10.0, positions: set[str] | None = None):
         self.s = requests.Session()
-        self.s.headers["User-Agent"] = "sleeper-agent/0.1"
+        self.s.headers["User-Agent"] = "ball-knower/0.1"
         self.data_dir = data_dir
         self.timeout = timeout
         self.positions = set(positions) if positions else league_positions(data_dir)

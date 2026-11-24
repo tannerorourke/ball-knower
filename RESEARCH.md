@@ -1,6 +1,6 @@
 # Draft Research Prompt
 
-For Claude/User: This is the manual, single-conversation alternative to `python -m sleeper_agent research`. It consumes `data/players_skeleton.csv` - Sleeper's own projections, ADP, and schedule: name, pos, team, bye, proj (scored in your league's settings), tier, adp, inj, age. This prompt performs the judgement on top: Reading team and player news, insights, and projections. Any model works; one with web access does the news sweep, one without still returns a usable board. Prompt starts below the horizontal line in a *new conversation*, and should be run after `python -m sleeper_agent setup`. 
+For Claude/User: This is the manual, single-conversation alternative to `python -m ball_knower research`. It consumes `data/players_skeleton.csv` - Sleeper's own projections, ADP, and schedule: name, pos, team, bye, proj (scored in your league's settings), tier, adp, inj, age. This prompt performs the judgement on top: Reading team and player news, insights, and projections. Any model works; one with web access does the news sweep, one without still returns a usable board. Prompt starts below the horizontal line in a *new conversation*, and should be run after `python -m ball_knower setup`. 
 
 Before running, check that `data\league.json`, `data\players_nfl.json`, and `data\players_skeleton.csv` exist/are attached.
 
@@ -16,7 +16,7 @@ You are the judgment layer for a fantasy football draft assistant. You receive `
 Season: <<2026>>   Platform: Sleeper   Teams: <<12>>
 Draft: <<snake>>, <<14>> rounds
 Roster: <<QB, RB, RB, WR, WR, TE, FLEX, FLEX, BN x6, IR x1>>   (FLEX = RB/WR/TE. K rows ride along in the skeleton and get judged like any other position when your roster has one - see the risk rubric below. DEF is out of scope: no row, no judgment.)
-Scoring: <<paste from `python -m sleeper_agent setup`>>
+Scoring: <<paste from `python -m ball_knower setup`>>
 ```
 
 ## What is locked and what is yours
@@ -45,7 +45,7 @@ Then build two tables the skeleton cannot know:
 
 ## Output
 
-Emit exactly three files: `players.csv` (all skeleton rows, same columns, same order), `stacks.csv`, `anti.csv`. If you are running through a file-system CLI inside a sleeper-agent folder, save the files to `sleeper-agent\data`. Process the board in chunks internally if needed, but emit each file once, whole.
+Emit exactly three files: `players.csv` (all skeleton rows, same columns, same order), `stacks.csv`, `anti.csv`. If you are running through a file-system CLI inside a ball-knower folder, save the files to `ball-knower\data`. Process the board in chunks internally if needed, but emit each file once, whole.
 
 ## Self-check before you emit (fix silently, do not report)
 

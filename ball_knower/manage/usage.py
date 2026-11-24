@@ -3,7 +3,7 @@
 Flags a rostered player whose share fell sharply, and a same-team same-position player who out-snaps
 one of mine. Writes one CSV row per player per week.
 
-    python3 -m sleeper_agent usage [--week N] [--candidates ID,ID]
+    python3 -m ball_knower usage [--week N] [--candidates ID,ID]
 """
 from __future__ import annotations
 

@@ -2,7 +2,7 @@
 the packet alone; a model pass may rewrite the four sections, kept only if `validate` passes. Writes
 out/manage/w<N>/report.md, packet.json and, for a rejected reply, rejected.md; a replay writes to w<N>-replay.
 
-    python3 -m sleeper_agent manage [--week N | --as-of-week N] [--no-llm] [--watch NAME] [--note TEXT] [--model M]
+    python3 -m ball_knower manage [--week N | --as-of-week N] [--no-llm] [--watch NAME] [--note TEXT] [--model M]
 """
 from __future__ import annotations
 

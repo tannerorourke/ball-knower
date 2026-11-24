@@ -1,4 +1,4 @@
-"""sleeper-agent command line: setup | validate | script | run | league | lineup | injuries | waivers | usage | manage | mock"""
+"""ball-knower command line: setup | validate | script | run | league | lineup | injuries | waivers | usage | manage | mock"""
 from __future__ import annotations
 
 import argparse
@@ -315,7 +315,7 @@ def cmd_mock(cfg, args):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(prog="sleeper-agent")
+    ap = argparse.ArgumentParser(prog="ball-knower")
     ap.add_argument("-c", "--config", default="config.yaml")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("setup", help="fetch league/draft settings, cache players, print my picks")

@@ -84,7 +84,7 @@ The first two keys below scale the projection for players still expected to be l
 | `inseason.usage_weeks` | `3` | `usage` looks at this many of the most recent completed weeks before `--week`; weeks with no stat rows are skipped. |
 | `inseason.usage_drop` | `0.15` | `usage` flags a rostered player whose snap, target or carry share fell by this much or more from the first week in the window to the last. |
 
-## Weekly report (`python -m sleeper_agent manage`)
+## Weekly report (`python -m ball_knower manage`)
 
 `manage` writes `out/manage/w<N>/report.md` and `packet.json`. Unless `--no-llm` is passed or `llm.backend` is `none`, it makes one model call in the `manage` phase (`llm.manage_model`, `llm.manage_timeout_s`, `llm.manage_effort`) and keeps the reply only if it passes validation; otherwise the engine's report stands with the reason in its header, and a rejected reply goes to `rejected.md`. On the `anthropic` backend a `manage` call may return up to 4000 tokens and a `draft` call 1200. It recommends and never writes to Sleeper.
 
@@ -137,7 +137,7 @@ before the next card fires.
 
 Free text passed verbatim to the card model and the post-pick analysis — your draft philosophy in prose (round ranges, positional rules, stack policy). This is the paramount lever for steering the SLEEPER pick; the deterministic scorer never reads it.
 
-## Offline dry runs (`mock.*`, `python -m sleeper_agent mock`)
+## Offline dry runs (`mock.*`, `python -m ball_knower mock`)
 
 | key | default | role |
 |---|---|---|

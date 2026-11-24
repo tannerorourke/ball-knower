@@ -3,7 +3,7 @@
 Built from Sleeper's league, users, rosters and NFL-state endpoints. Also resolves which injury
 statuses the league lets onto reserve; every weekly command in `manage` starts from it.
 
-    python3 -m sleeper_agent league
+    python3 -m ball_knower league
 """
 from __future__ import annotations
 

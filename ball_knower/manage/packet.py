@@ -2,7 +2,7 @@
 in-season research set, as one JSON-serializable dict. `closed_set` names every player the packet mentions,
 so anything written from it can be checked against that list.
 
-    python3 -m sleeper_agent manage [--week N] [--watch NAME]
+    python3 -m ball_knower manage [--week N] [--watch NAME]
 """
 from __future__ import annotations
 

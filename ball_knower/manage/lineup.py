@@ -4,7 +4,7 @@ Fixed slots take the top projected players at their position, then flex slots fi
 least restrictive. Reserve and taxi players, counted after the recommended reserve moves, are out
 of play.
 
-    python3 -m sleeper_agent lineup [--week N]
+    python3 -m ball_knower lineup [--week N]
 """
 from __future__ import annotations
 

@@ -94,7 +94,7 @@ BLOCK_RE = re.compile(r"```(players\.csv|stacks\.csv|anti\.csv)\s*\n(.*?)```", r
 def league_line(data_dir: str) -> str:
     lj = os.path.join(data_dir, "league.json")
     if not os.path.exists(lj):
-        return "12-team half-PPR snake (details unavailable - run `python -m sleeper_agent setup`)"
+        return "12-team half-PPR snake (details unavailable - run `python -m ball_knower setup`)"
     with open(lj) as f:
         info = json.load(f)
     sc = info.get("scoring_settings") or {}
@@ -127,7 +127,7 @@ def _slug(label: str) -> str:
 def write_shards(data_dir: str, out_dir: str, by: str) -> list[str]:
     skel_path = os.path.join(data_dir, "players_skeleton.csv")
     if not os.path.exists(skel_path):
-        sys.exit("no players_skeleton.csv - run `python -m sleeper_agent fetch` first")
+        sys.exit("no players_skeleton.csv - run `python -m ball_knower fetch` first")
     skeleton = pd.read_csv(skel_path)
     rdir = os.path.join(out_dir, "research")
     os.makedirs(rdir, exist_ok=True)
@@ -320,7 +320,7 @@ def cmd_research(cfg, args):
     for note in merge(cfg["data_dir"], out_dir, replies):
         print("NOTE:", note)
     print("\nmerged -> data/players.csv, stacks.csv, anti.csv; validating:")
-    res = load_research(cfg["data_dir"], None if args.offline else __import__("sleeper_agent.core.sleeper", fromlist=["Sleeper"]).Sleeper(cfg["data_dir"]).players())
+    res = load_research(cfg["data_dir"], None if args.offline else __import__("ball_knower.core.sleeper", fromlist=["Sleeper"]).Sleeper(cfg["data_dir"]).players())
     for p in res.problems:
         print(p)
     print("RESULT:", "OK" if res.ok else "ERRORS - fix before draft day")

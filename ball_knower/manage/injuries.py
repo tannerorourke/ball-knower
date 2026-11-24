@@ -3,7 +3,7 @@
 Reserve eligibility follows the league's own `reserve_allow_*` settings. `after_reserve_moves` applies
 the reserve flags to my roster so lineup and waiver scoring see the roster as it will stand.
 
-    python3 -m sleeper_agent injuries
+    python3 -m ball_knower injuries
 """
 from __future__ import annotations
 

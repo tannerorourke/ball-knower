@@ -1,4 +1,4 @@
-# sleeper-agent
+# ball-knower
 
 A Sleeper Sports snake-draft assistant and agentic research workflow. It researches, follows, and suggests, you make the pick.
 
@@ -12,22 +12,22 @@ At draft time, the system uses a deterministic scoring algorithm based on VORP a
 
 **Before draft**:
 
-1. `cd ./sleeper-agent` $\rightarrow$ `pip install -r requirements.txt` $\rightarrow$ set `league_id` (`sleeper.com/leagues/<this_number>/league`) and username in `config.yaml`.
-2. `python -m sleeper_agent setup` - confirms roster/scoring parse, seeds `players_skeleton.csv`, and prints your picks + a settings block.
+1. `cd ./ball-knower` $\rightarrow$ `pip install -r requirements.txt` $\rightarrow$ set `league_id` (`sleeper.com/leagues/<this_number>/league`) and username in `config.yaml`.
+2. `python -m ball_knower setup` - confirms roster/scoring parse, seeds `players_skeleton.csv`, and prints your picks + a settings block.
 
 **Draft day (2+ hrs out)**:
 
 1. Research options:
-   - **(best)** `python -m sleeper_agent research --by team` - Seed players and base stats (bye week, VORP, etc) from Sleeper's projections API base stats. Research agents analyze team and player news *per-team* (4 concurrent, ~35m runtime) to add judgement data (floor/ceil, risk, role, tags, tiers, po_sched), and emit `players.csv`/`stacks.csv`/`anti.csv`. Booyah!
-   - **(good)** `python -m sleeper_agent research` - Seeds base stats, run research agents *per NFL division* (4 concurrent, ~10m) to add judgement data and emit research tables. Best if short on time.
-   - **(ok)** `python -m sleeper_agent fetch` - only generate `data/players_skeleton.csv`. Run `RESEARCH.md` in a LM of your choice with the skeleton attached. Place output under `data\`.
-2. Once the draft order posts: `python -m sleeper_agent script` - your round-by-round expected board.
+   - **(best)** `python -m ball_knower research --by team` - Seed players and base stats (bye week, VORP, etc) from Sleeper's projections API base stats. Research agents analyze team and player news *per-team* (4 concurrent, ~35m runtime) to add judgement data (floor/ceil, risk, role, tags, tiers, po_sched), and emit `players.csv`/`stacks.csv`/`anti.csv`. Booyah!
+   - **(good)** `python -m ball_knower research` - Seeds base stats, run research agents *per NFL division* (4 concurrent, ~10m) to add judgement data and emit research tables. Best if short on time.
+   - **(ok)** `python -m ball_knower fetch` - only generate `data/players_skeleton.csv`. Run `RESEARCH.md` in a LM of your choice with the skeleton attached. Place output under `data\`.
+2. Once the draft order posts: `python -m ball_knower script` - your round-by-round expected board.
 3. Edit strategy_notes in `config.yaml` for additional rules you want enforced during your draft.
-4. (Optional) `python -m sleeper_agent mock --offline --speed 60` (add --no-llm to skip model card) - dry run on the research tables so the screen and CLI output is familiar.
+4. (Optional) `python -m ball_knower mock --offline --speed 60` (add --no-llm to skip model card) - dry run on the research tables so the screen and CLI output is familiar.
 
 **Draft Time**:
 
-`python -m sleeper_agent run`. Leave it running while your draft goes.
+`python -m ball_knower run`. Leave it running while your draft goes.
 
 When you're on the clock the header turns red. The harness's card is already there, the model output card lands 20–40 s later. Once you pick in Sleeper, the next tick sees your pick and moves on.
 
@@ -37,8 +37,8 @@ The tool recommends moves and never writes to Sleeper. You make every add, drop,
 
 Each week:
 
-1. `python -m sleeper_agent research --in-season` runs a 7-day news sweep, one agent per NFL team of your roster and the waiver candidates, and writes a refresh set under `data/research/`. The report warns when the latest set is older than `research.max_age_days`.
-2. `python -m sleeper_agent manage` builds the week's packet (lineup, injuries, waiver adds scored over the horizon, usage trends, the research set and its news) and writes `out/manage/w<N>/report.md` and `packet.json`.
+1. `python -m ball_knower research --in-season` runs a 7-day news sweep, one agent per NFL team of your roster and the waiver candidates, and writes a refresh set under `data/research/`. The report warns when the latest set is older than `research.max_age_days`.
+2. `python -m ball_knower manage` builds the week's packet (lineup, injuries, waiver adds scored over the horizon, usage trends, the research set and its news) and writes `out/manage/w<N>/report.md` and `packet.json`.
 3. Read the report, then make the moves you agree with in Sleeper.
 
 The report has four sections: Moves, Lineup, Injuries, Passing on. The engine writes them from the packet alone. Unless `llm.backend` is `none`, one model call then reads the packet and rewrites the four sections, reasoning across them (a free reserve slot, a bye hole, your notes). Each Moves item opens with one bold action: `**Add X, drop Y**`, `**Add X**`, `**Move X to IR**`, `**Activate X**` or `**Hold**`.
@@ -65,12 +65,12 @@ See `config.yaml`. Documented in [config.md](config.md)
 All commands read `config.yaml` (`-c other.yaml` to override).
 
 ```bash
-python -m sleeper_agent setup    # pull league + draft settings, cache players, print my picks and a
+python -m ball_knower setup    # pull league + draft settings, cache players, print my picks and a
                                   # settings block to paste into RESEARCH_PROMPT.md.
-python -m sleeper_agent script   # Monte Carlo from an empty board: who is likely there at each of
+python -m ball_knower script   # Monte Carlo from an empty board: who is likely there at each of
                                   # my picks. --slot N to try a slot before the order is posted.
-python -m sleeper_agent run      # draft day. Dashboard in the terminal; --headless writes files only.
-python -m sleeper_agent mock     # dry run against a simulated draft. --speed 60 finishes in ~3 min,
+python -m ball_knower run      # draft day. Dashboard in the terminal; --headless writes files only.
+python -m ball_knower mock     # dry run against a simulated draft. --speed 60 finishes in ~3 min,
                                   # --no-llm skips the card call, --slot N, --seed N.
 ```
 

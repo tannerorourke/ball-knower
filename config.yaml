@@ -78,7 +78,7 @@ strategy_notes: >
   or a second QB before round 11. A stack with my QB breaks ties inside a tier only. Rounds 11-14:
   ceiling, handcuffs of my RBs, one IR_STASH if available.
 
-# --- Mock draft (python -m sleeper_agent mock) ------------------------------
+# --- Mock draft (python -m ball_knower mock) ------------------------------
 mock:
   teams: 12
   rounds: 14

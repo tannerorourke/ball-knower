@@ -60,7 +60,7 @@ def build_skeleton(data_dir: str, season: int | None = None, scoring: dict | Non
         notes.append(f"season not in league.json; assuming {season}")
     if not scoring:
         scoring = DEFAULT_SCORING
-        notes.append("no league.json scoring; using default half-PPR — run `python -m sleeper_agent setup` first for exact points")
+        notes.append("no league.json scoring; using default half-PPR — run `python -m ball_knower setup` first for exact points")
 
     rec = float(scoring.get("rec", 0))
     adp_field = "adp_ppr" if rec >= 1 else ("adp_half_ppr" if rec > 0 else "adp_std")

@@ -3,7 +3,7 @@
 Gain is scored on my roster after the recommended reserve moves. Each add carries a FAAB band from
 past winning bids; each drop carries `ros`, its projection through week 17, which breaks gain ties.
 
-    python3 -m sleeper_agent waivers [--week N]
+    python3 -m ball_knower waivers [--week N]
 """
 from __future__ import annotations
 
